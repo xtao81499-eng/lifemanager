@@ -41,6 +41,7 @@ def events_to_dataframe(events: list[dict]) -> pd.DataFrame:
             "category": parsed.category if parsed.category != "未分类" else calendar_name,
             "task": parsed.task,
             "score": parsed.score,
+            "detail": (event.get("description") or "").strip(),
             "raw_title": parsed.raw,
         })
 
