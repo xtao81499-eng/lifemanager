@@ -136,18 +136,18 @@ THEMES = {
         "popup_detail": "#E5E5EA", "popup_border": "rgba(255,255,255,0.15)",
     },
     "dark": {
-        "bg": "#0A0A0A", "surface": "#141414", "card": "#141414",
-        "text": "#E8E4E0", "muted": "#6B6560", "faint": "#3D3A37",
-        "border": "rgba(255,255,255,0.06)",
-        "shadow": "0 1px 8px rgba(0,0,0,0.4), 0 0 1px rgba(255,255,255,0.03)",
-        "shadow_hover": "0 2px 12px rgba(0,0,0,0.6), 0 0 1px rgba(255,255,255,0.05)",
-        "card_shadow": "0 1px 12px rgba(0,0,0,0.5), 0 0 1px rgba(255,255,255,0.03)",
-        "radius": "4px", "radius_sm": "4px", "accent": "#E8E4E0",
-        "section_transform": "uppercase", "section_spacing": "0.15em",
-        "btn_bg": "#1A1A1A", "btn_hover": "#252525", "btn_active_bg": "#E8E4E0", "btn_active_text": "#0A0A0A",
-        "hm_active": "#4A8A5A", "hm_empty": "#1E1E1E",
-        "popup_bg": "#E8E4E0", "popup_text": "#0A0A0A", "popup_score": "#4A8A5A",
-        "popup_detail": "#3D3A37", "popup_border": "rgba(0,0,0,0.1)",
+        "bg": "#080808", "surface": "#080808", "card": "#080808",
+        "text": "#D4CFC9", "muted": "#5A5550", "faint": "#2E2B28",
+        "border": "rgba(255,255,255,0.08)",
+        "shadow": "none",
+        "shadow_hover": "none",
+        "card_shadow": "none",
+        "radius": "0px", "radius_sm": "0px", "accent": "#D4CFC9",
+        "section_transform": "uppercase", "section_spacing": "0.25em",
+        "btn_bg": "transparent", "btn_hover": "rgba(255,255,255,0.04)", "btn_active_bg": "#D4CFC9", "btn_active_text": "#080808",
+        "hm_active": "#D4CFC9", "hm_empty": "#1A1816",
+        "popup_bg": "#D4CFC9", "popup_text": "#080808", "popup_score": "#080808",
+        "popup_detail": "#5A5550", "popup_border": "rgba(0,0,0,0.12)",
     },
 }
 
@@ -324,6 +324,82 @@ st.markdown(f"""
         background: {T["btn_active_bg"]};
         color: {T["btn_active_text"]};
     }}
+{f'''
+    /* ─── DARK: Rick Owens structural overrides ─── */
+    .app-header h1 {{
+        font-weight: 300 !important;
+        letter-spacing: 0.12em !important;
+        text-transform: uppercase !important;
+        font-size: 1.6rem !important;
+    }}
+    .app-header p {{
+        font-weight: 300 !important;
+        letter-spacing: 0.08em !important;
+        text-transform: uppercase !important;
+        font-size: 0.7rem !important;
+    }}
+    .section-title {{
+        font-weight: 300 !important;
+        font-size: 0.75rem !important;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+        padding-bottom: 0.6rem;
+        margin-top: 3rem !important;
+    }}
+    .metric-card {{
+        border: none !important;
+        border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+        padding: 1.5rem 0 !important;
+    }}
+    .metric-card:hover {{
+        transform: none !important;
+    }}
+    .metric-label {{
+        font-weight: 300 !important;
+        letter-spacing: 0.18em !important;
+        font-size: 0.6rem !important;
+    }}
+    .metric-value {{
+        font-weight: 300 !important;
+        font-size: 2.4rem !important;
+        letter-spacing: 0.02em !important;
+    }}
+    .metric-sub {{
+        font-weight: 300 !important;
+        letter-spacing: 0.05em !important;
+    }}
+    .habit-card {{
+        background: transparent !important;
+        border: 1px solid rgba(255,255,255,0.06);
+    }}
+    .habit-name {{
+        font-weight: 300 !important;
+        letter-spacing: 0.15em !important;
+    }}
+    .habit-value {{
+        font-weight: 300 !important;
+    }}
+    .card {{
+        background: transparent !important;
+        border: 1px solid rgba(255,255,255,0.06);
+    }}
+    .stButton button {{
+        border: 1px solid rgba(255,255,255,0.1) !important;
+        font-weight: 300 !important;
+        letter-spacing: 0.1em !important;
+        text-transform: uppercase !important;
+        font-size: 0.7rem !important;
+    }}
+    .quick-btn {{
+        border-radius: 0 !important;
+        border: 1px solid rgba(255,255,255,0.1);
+        font-weight: 300 !important;
+        letter-spacing: 0.1em !important;
+    }}
+    .insight-text {{
+        font-weight: 300 !important;
+        letter-spacing: 0.05em !important;
+    }}
+''' if theme == "dark" else ''}
 </style>
 """, unsafe_allow_html=True)
 
@@ -344,18 +420,18 @@ COLORS_LIGHT = {
 }
 
 COLORS_DARK = {
-    "工作": "#4A6FA5",
-    "学习": "#6B6AAF",
-    "运动": "#A3485A",
-    "睡眠": "#7A4F8A",
-    "社交": "#9E7040",
-    "餐饮": "#4A8A5A",
-    "生活": "#4A8FA5",
-    "通勤": "#7A6A50",
-    "拖延": "#8A3A3A",
-    "家庭": "#A3485A",
-    "基础/洗漱": "#5A5A5A",
-    "深度复盘/灵感": "#6B6AAF",
+    "工作": "#8A8580",
+    "学习": "#7A7570",
+    "运动": "#D4CFC9",
+    "睡眠": "#5A5550",
+    "社交": "#9A9590",
+    "餐饮": "#6A6560",
+    "生活": "#7A7570",
+    "通勤": "#4A4540",
+    "拖延": "#3A3530",
+    "家庭": "#9A9590",
+    "基础/洗漱": "#3A3530",
+    "深度复盘/灵感": "#8A8580",
 }
 
 COLORS = COLORS_LIGHT if theme == "light" else COLORS_DARK
@@ -629,14 +705,14 @@ heatmap_html = f"""
 <html>
 <head>
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@{"300;400" if theme == "dark" else "400;500;600"}&display=swap');
     * {{ margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; }}
     body {{ background: transparent; overflow: hidden; }}
     .hm-container {{
         background: {T["card"]};
         border-radius: {T["radius"]};
-        padding: 1.5rem 1.8rem;
-        box-shadow: {T["card_shadow"]};
+        padding: {"2rem 0" if theme == "dark" else "1.5rem 1.8rem"};
+        {"border-top: 1px solid rgba(255,255,255,0.08);" if theme == "dark" else f'box-shadow: {T["card_shadow"]};'}
         overflow-x: {"auto" if needs_scroll else "hidden"};
     }}
     .hm-grid {{
@@ -664,16 +740,17 @@ heatmap_html = f"""
     }}
     .hm-label {{
         font-size: 0.78rem;
-        font-weight: 500;
+        font-weight: {"300" if theme == "dark" else "500"};
         color: {T["text"]};
         text-align: right;
         padding-right: 0.8rem;
         white-space: nowrap;
+        {"letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.6rem;" if theme == "dark" else ""}
     }}
     .hm-cell {{
         width: {cell_size}px;
         height: {cell_size}px;
-        border-radius: {max(3, cell_size // 7)}px;
+        border-radius: {"0" if theme == "dark" else f"{max(3, cell_size // 7)}px"};
         transition: transform 0.15s ease, box-shadow 0.15s ease;
         cursor: default;
         position: relative;
@@ -681,7 +758,7 @@ heatmap_html = f"""
     }}
     .hm-cell:hover {{
         transform: scale(1.2);
-        box-shadow: 0 4px 12px rgba(60,60,67,0.14);
+        {"box-shadow: none;" if theme == "dark" else "box-shadow: 0 4px 12px rgba(60,60,67,0.14);"}
         z-index: 10;
     }}
     .hm-active {{ background: {T["hm_active"]}; }}
@@ -689,9 +766,10 @@ heatmap_html = f"""
     .hm-streak {{
         font-size: 0.65rem;
         color: {T["muted"]};
-        font-weight: 500;
+        font-weight: {"300" if theme == "dark" else "500"};
         padding-left: 0.5rem;
         white-space: nowrap;
+        {"letter-spacing: 0.08em;" if theme == "dark" else ""}
     }}
     .hm-spacer {{ pointer-events: none; }}
     #hm-popup {{
@@ -811,8 +889,8 @@ if insights["suggestions"]:
         .ri-card {{
             background: {T["card"]};
             border-radius: {T["radius"]};
-            padding: 1.8rem 2rem;
-            box-shadow: {T["card_shadow"]};
+            padding: {"2rem 0" if theme == "dark" else "1.8rem 2rem"};
+            {"border-top: 1px solid rgba(255,255,255,0.08);" if theme == "dark" else f'box-shadow: {T["card_shadow"]};'}
         }}
         .ri-header {{
             display: flex;
@@ -821,23 +899,26 @@ if insights["suggestions"]:
             margin-bottom: 1.2rem;
         }}
         .ri-title {{
-            font-size: 0.95rem;
-            font-weight: 600;
+            font-size: {"0.7rem" if theme == "dark" else "0.95rem"};
+            font-weight: {"300" if theme == "dark" else "600"};
             color: {T["accent"]};
+            {"letter-spacing: 0.2em; text-transform: uppercase;" if theme == "dark" else ""}
         }}
         .ri-date {{
             font-size: 0.7rem;
-            font-weight: 500;
+            font-weight: {"300" if theme == "dark" else "500"};
             color: {T["muted"]};
             background: {T["surface"]};
             padding: 0.25rem 0.7rem;
-            border-radius: 999px;
+            border-radius: {"0" if theme == "dark" else "999px"};
+            {"border: 1px solid rgba(255,255,255,0.08);" if theme == "dark" else ""}
         }}
         .ri-source {{
             font-size: 0.7rem;
             color: {T["faint"]};
             margin-bottom: 1rem;
-            font-weight: 400;
+            font-weight: {"300" if theme == "dark" else "400"};
+            {"letter-spacing: 0.05em;" if theme == "dark" else ""}
         }}
         .ri-item {{
             display: flex;
@@ -850,18 +931,19 @@ if insights["suggestions"]:
         }}
         .ri-item:last-child {{ border-bottom: none; }}
         .ri-bullet {{
-            width: 7px;
-            height: 7px;
-            min-width: 7px;
-            border-radius: 50%;
+            width: {"5px" if theme == "dark" else "7px"};
+            height: {"5px" if theme == "dark" else "7px"};
+            min-width: {"5px" if theme == "dark" else "7px"};
+            border-radius: {"0" if theme == "dark" else "50%"};
             background: {T["accent"]};
-            margin-top: 0.45rem;
+            margin-top: 0.5rem;
         }}
         .ri-item span {{
             font-size: 0.82rem;
-            font-weight: 400;
+            font-weight: {"300" if theme == "dark" else "400"};
             color: {T["text"]};
             line-height: 1.55;
+            {"letter-spacing: 0.02em;" if theme == "dark" else ""}
         }}
         @keyframes fadeIn {{
             from {{ opacity: 0; transform: translateY(4px); }}
