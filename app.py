@@ -525,6 +525,7 @@ weekday_labels = ["一", "二", "三", "四", "五", "六", "日"]
 
 # Build grid data: for each habit × each date, check if active & get score
 import html as _html
+import json as _json
 grid_rows_html = ""
 for cat_name in heatmap_cats:
     cat_events = heatmap_data[heatmap_data["category"] == cat_name]
@@ -536,18 +537,14 @@ for cat_name in heatmap_cats:
     cells_html_parts = []
     for d in date_range:
         if d in daily_scores.index:
-            tip = d.strftime("%m月%d日")
-            if pd.notna(daily_scores[d]):
-                tip += f" · {daily_scores[d]:.1f}/10"
-            else:
-                tip += " · 已完成"
+            date_str = d.strftime("%m月%d日")
+            score_val = f"{daily_scores[d]:.1f}" if pd.notna(daily_scores[d]) else ""
             detail_text = str(daily_details.get(d, "")).strip() if d in daily_details.index else ""
-            if detail_text:
-                tip += "&#10;" + _html.escape(detail_text).replace("\n", "&#10;")
-            cells_html_parts.append(f'<div class="hm-cell hm-active" data-tip="{tip}"></div>')
+            attrs = f'data-date="{date_str}" data-score="{score_val}" data-detail="{_html.escape(detail_text)}"'
+            cells_html_parts.append(f'<div class="hm-cell hm-active" {attrs}></div>')
         else:
-            tip = f'{d.strftime("%m月%d日")} · 未记录'
-            cells_html_parts.append(f'<div class="hm-cell hm-empty" data-tip="{tip}"></div>')
+            date_str = d.strftime("%m月%d日")
+            cells_html_parts.append(f'<div class="hm-cell hm-empty" data-date="{date_str}"></div>')
     cells_all = "".join(cells_html_parts)
     active_count = sum(1 for d in date_range if d in daily_scores.index)
     streak_text = f"{active_count}/{len(date_range)}"
@@ -580,10 +577,9 @@ heatmap_html = f"""
     .hm-container {{
         background: #FFFFFF;
         border-radius: 18px;
-        padding: 1.5rem 1.8rem 4rem;
+        padding: 1.5rem 1.8rem;
         box-shadow: 0 2px 20px rgba(60,60,67,0.06), 0 0 1px rgba(60,60,67,0.12);
         overflow-x: {"auto" if needs_scroll else "hidden"};
-        overflow-y: visible;
     }}
     .hm-grid {{
         display: inline-grid;
@@ -640,34 +636,42 @@ heatmap_html = f"""
         white-space: nowrap;
     }}
     .hm-spacer {{ pointer-events: none; }}
-    .hm-cell[data-tip]:hover::after {{
-        content: attr(data-tip);
-        position: absolute;
-        top: calc(100% + 8px);
-        left: 50%;
-        transform: translateX(-50%);
+    #hm-popup {{
+        display: none;
+        position: fixed;
         background: #1D1D1F;
         color: #FFFFFF;
-        font-size: 0.68rem;
-        font-weight: 500;
-        padding: 0.35rem 0.65rem;
-        border-radius: 8px;
-        white-space: pre-line;
-        max-width: 180px;
-        text-align: left;
-        z-index: 1000;
+        border-radius: 10px;
+        padding: 0.6rem 0.9rem;
+        font-size: 0.72rem;
+        z-index: 9999;
         pointer-events: none;
+        min-width: 100px;
+        max-width: 200px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.25);
     }}
-    .hm-cell[data-tip]:hover::before {{
-        content: '';
-        position: absolute;
-        top: calc(100% + 2px);
-        left: 50%;
-        transform: translateX(-50%);
-        border: 5px solid transparent;
-        border-bottom-color: #1D1D1F;
-        z-index: 1000;
-        pointer-events: none;
+    #hm-popup .pop-date {{
+        font-weight: 600;
+        margin-bottom: 0.2rem;
+    }}
+    #hm-popup .pop-score {{
+        color: #34C759;
+        font-weight: 600;
+        margin-bottom: 0.3rem;
+    }}
+    #hm-popup .pop-detail {{
+        border-top: 1px solid rgba(255,255,255,0.15);
+        padding-top: 0.35rem;
+        margin-top: 0.2rem;
+    }}
+    #hm-popup .pop-detail-line {{
+        color: #E5E5EA;
+        line-height: 1.5;
+        font-size: 0.68rem;
+    }}
+    #hm-popup .pop-empty {{
+        color: #86868B;
+        font-style: italic;
     }}
 </style>
 </head>
@@ -680,11 +684,39 @@ heatmap_html = f"""
         {grid_rows_html}
     </div>
 </div>
+<div id="hm-popup"></div>
+<script>
+const popup = document.getElementById('hm-popup');
+document.querySelectorAll('.hm-cell').forEach(cell => {{
+    cell.addEventListener('mouseenter', e => {{
+        const date = cell.dataset.date || '';
+        const score = cell.dataset.score || '';
+        const detail = cell.dataset.detail || '';
+        if (!date) return;
+        let html = '<div class="pop-date">' + date + '</div>';
+        if (score) html += '<div class="pop-score">' + score + '/10</div>';
+        else if (cell.classList.contains('hm-active')) html += '<div class="pop-score">已完成</div>';
+        else html += '<div class="pop-empty">未记录</div>';
+        if (detail) {{
+            const lines = detail.split('\\n').filter(l => l.trim());
+            html += '<div class="pop-detail">' + lines.map(l => '<div class="pop-detail-line">' + l + '</div>').join('') + '</div>';
+        }}
+        popup.innerHTML = html;
+        popup.style.display = 'block';
+        const rect = cell.getBoundingClientRect();
+        popup.style.left = (rect.left + rect.width/2 - popup.offsetWidth/2) + 'px';
+        popup.style.top = (rect.bottom + 8) + 'px';
+    }});
+    cell.addEventListener('mouseleave', () => {{
+        popup.style.display = 'none';
+    }});
+}});
+</script>
 </body>
 </html>
 """
 
-components.html(heatmap_html, height=grid_height + 80 + (20 if needs_scroll else 0), scrolling=False)
+components.html(heatmap_html, height=grid_height + 60 + (20 if needs_scroll else 0), scrolling=False)
 
 
 # ─── Row 4: Reflection Insights ────────────────────────────
