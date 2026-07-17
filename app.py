@@ -524,19 +524,31 @@ date_range = pd.date_range(start=start_date, end=end_date, freq="D")
 weekday_labels = ["一", "二", "三", "四", "五", "六", "日"]
 
 # Build grid data: for each habit × each date, check if active & get score
+import html as _html
 grid_rows_html = ""
 for cat_name in heatmap_cats:
     cat_events = heatmap_data[heatmap_data["category"] == cat_name]
     daily_scores = cat_events.groupby("date")["score"].mean()
+    daily_details = cat_events.groupby("date")["detail"].apply(
+        lambda x: "\n".join(s.strip() for s in x if str(s).strip())
+    ) if "detail" in cat_events.columns else pd.Series(dtype=str)
 
-    cells_all = "".join(
-        f'<div class="hm-cell hm-active" data-tip="{d.strftime("%m月%d日")} · {daily_scores[d]:.1f}/10 " ></div>'
-        if d in daily_scores.index and pd.notna(daily_scores[d])
-        else f'<div class="hm-cell hm-active" data-tip="{d.strftime("%m月%d日")} · 已完成"></div>'
-        if d in daily_scores.index
-        else f'<div class="hm-cell hm-empty" data-tip="{d.strftime("%m月%d日")} · 未记录"></div>'
-        for d in date_range
-    )
+    cells_html_parts = []
+    for d in date_range:
+        if d in daily_scores.index:
+            tip = d.strftime("%m月%d日")
+            if pd.notna(daily_scores[d]):
+                tip += f" · {daily_scores[d]:.1f}/10"
+            else:
+                tip += " · 已完成"
+            detail_text = str(daily_details.get(d, "")).strip() if d in daily_details.index else ""
+            if detail_text:
+                tip += "&#10;" + _html.escape(detail_text).replace("\n", "&#10;")
+            cells_html_parts.append(f'<div class="hm-cell hm-active" data-tip="{tip}"></div>')
+        else:
+            tip = f'{d.strftime("%m月%d日")} · 未记录'
+            cells_html_parts.append(f'<div class="hm-cell hm-empty" data-tip="{tip}"></div>')
+    cells_all = "".join(cells_html_parts)
     active_count = sum(1 for d in date_range if d in daily_scores.index)
     streak_text = f"{active_count}/{len(date_range)}"
     grid_rows_html += f"""
@@ -638,8 +650,10 @@ heatmap_html = f"""
         font-size: 0.68rem;
         font-weight: 500;
         padding: 0.35rem 0.65rem;
-        border-radius: 999px;
-        white-space: nowrap;
+        border-radius: 8px;
+        white-space: pre-line;
+        max-width: 180px;
+        text-align: left;
         z-index: 1000;
         pointer-events: none;
     }}
@@ -671,129 +685,6 @@ heatmap_html = f"""
 
 components.html(heatmap_html, height=grid_height + (20 if needs_scroll else 0), scrolling=False)
 
-# ─── Row 3.5: Workout Log ──────────────────────────────────
-st.markdown('<div class="section-title">运动记录</div>', unsafe_allow_html=True)
-
-import html as _html
-
-workout_df = df[df["category"] == "运动"].copy()
-if not workout_df.empty:
-    workout_df = workout_df.sort_values("start", ascending=False, na_position="last")
-
-_WK_COLOR = COLORS.get("运动", "#FF2D55")
-
-if workout_df.empty:
-    st.markdown(
-        f"""
-        <div style="background:#FFFFFF;border-radius:18px;padding:2.2rem;text-align:center;
-                    box-shadow:0 1px 12px rgba(60,60,67,0.05),0 0 1px rgba(60,60,67,0.10);">
-            <p style="color:#86868B;margin:0;font-size:0.9rem;">
-                {start_date.strftime('%m/%d')} — {end_date.strftime('%m/%d')} 暂无运动记录
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-else:
-    items_html = ""
-    for _, row in workout_df.iterrows():
-        d = row["start"]
-        date_label = d.strftime("%m/%d") if pd.notna(d) else "—"
-        task_label = _html.escape(str(row.get("task") or "运动"))
-        score = row.get("score")
-        score_html = (
-            f'<span class="wk-score">{score:.1f}/10</span>'
-            if pd.notna(score) else ""
-        )
-
-        detail = str(row.get("detail") or "").strip()
-        if detail:
-            lines = [ln.strip() for ln in detail.splitlines() if ln.strip()]
-            detail_html = "".join(
-                f'<div class="wk-detail-line">{_html.escape(ln)}</div>' for ln in lines
-            )
-        else:
-            detail_html = '<div class="wk-detail-line wk-detail-empty">未记录详情</div>'
-
-        items_html += f"""
-        <div class="wk-item">
-            <div class="wk-head">
-                <span class="wk-date">{date_label}</span>
-                <span class="wk-task">{task_label}</span>
-                {score_html}
-            </div>
-            <div class="wk-details">{detail_html}</div>
-        </div>"""
-
-    workout_html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
-        * {{ margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; }}
-        body {{ background: transparent; }}
-        .wk-card {{
-            background: #FFFFFF;
-            border-radius: 18px;
-            padding: 1.6rem 1.9rem;
-            box-shadow: 0 1px 12px rgba(60,60,67,0.05), 0 0 1px rgba(60,60,67,0.10);
-        }}
-        .wk-item {{
-            padding: 0.9rem 0;
-            border-bottom: 1px solid #F0F0F2;
-        }}
-        .wk-item:last-child {{ border-bottom: none; }}
-        .wk-item:first-child {{ padding-top: 0; }}
-        .wk-head {{
-            display: flex;
-            align-items: baseline;
-            gap: 0.7rem;
-            margin-bottom: 0.45rem;
-        }}
-        .wk-date {{
-            font-size: 0.8rem;
-            font-weight: 600;
-            color: {_WK_COLOR};
-            min-width: 3rem;
-        }}
-        .wk-task {{
-            font-size: 0.9rem;
-            font-weight: 600;
-            color: #1D1D1F;
-            flex: 1;
-        }}
-        .wk-score {{
-            font-size: 0.7rem;
-            font-weight: 500;
-            color: #86868B;
-            background: #F5F5F7;
-            padding: 0.2rem 0.6rem;
-            border-radius: 999px;
-            white-space: nowrap;
-        }}
-        .wk-details {{ padding-left: 3.7rem; }}
-        .wk-detail-line {{
-            font-size: 0.82rem;
-            color: #48484A;
-            line-height: 1.6;
-        }}
-        .wk-detail-empty {{ color: #C7C7CC; font-style: italic; }}
-    </style>
-    </head>
-    <body>
-    <div class="wk-card">{items_html}</div>
-    </body>
-    </html>
-    """
-
-    # 估算高度：卡片内边距 + 每条(头部+详情行)
-    _total_lines = sum(
-        max(1, len([l for l in str(r.get("detail") or "").splitlines() if l.strip()]))
-        for _, r in workout_df.iterrows()
-    )
-    _wk_height = 60 + len(workout_df) * 58 + _total_lines * 22
-    components.html(workout_html, height=_wk_height, scrolling=False)
 
 # ─── Row 4: Reflection Insights ────────────────────────────
 st.markdown('<div class="section-title">反思洞察</div>', unsafe_allow_html=True)
