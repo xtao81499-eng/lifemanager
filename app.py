@@ -115,296 +115,186 @@ components.html(
     height=0,
 )
 
-# ─── Theme System ───────────────────────────────────────────
-if "theme" not in st.session_state:
-    st.session_state["theme"] = "light"
-theme = st.session_state["theme"]
-
-THEMES = {
-    "light": {
-        "bg": "#FFFFFF", "surface": "#F5F5F7", "card": "#FFFFFF",
-        "text": "#1D1D1F", "muted": "#86868B", "faint": "#AEAEB2",
-        "border": "rgba(60,60,67,0.06)",
-        "shadow": "0 1px 3px rgba(60,60,67,0.04), 0 6px 16px rgba(60,60,67,0.05)",
-        "shadow_hover": "0 2px 6px rgba(60,60,67,0.06), 0 12px 28px rgba(60,60,67,0.09)",
-        "card_shadow": "0 2px 20px rgba(60,60,67,0.06), 0 0 1px rgba(60,60,67,0.12)",
-        "radius": "18px", "radius_sm": "12px", "accent": "#0A84FF",
-        "section_transform": "none", "section_spacing": "-0.01em",
-        "btn_bg": "#F5F5F7", "btn_hover": "#E8E8ED", "btn_active_bg": "#1D1D1F", "btn_active_text": "#FFFFFF",
-        "hm_active": "#34C759", "hm_empty": "#E5E5EA",
-        "popup_bg": "#1D1D1F", "popup_text": "#FFFFFF", "popup_score": "#34C759",
-        "popup_detail": "#E5E5EA", "popup_border": "rgba(255,255,255,0.15)",
-    },
-    "dark": {
-        "bg": "#080808", "surface": "#080808", "card": "#080808",
-        "text": "#D4CFC9", "muted": "#5A5550", "faint": "#2E2B28",
-        "border": "rgba(255,255,255,0.08)",
-        "shadow": "none",
-        "shadow_hover": "none",
-        "card_shadow": "none",
-        "radius": "0px", "radius_sm": "0px", "accent": "#D4CFC9",
-        "section_transform": "uppercase", "section_spacing": "0.25em",
-        "btn_bg": "transparent", "btn_hover": "rgba(255,255,255,0.04)", "btn_active_bg": "#D4CFC9", "btn_active_text": "#080808",
-        "hm_active": "#D4CFC9", "hm_empty": "#1A1816",
-        "popup_bg": "#D4CFC9", "popup_text": "#080808", "popup_score": "#080808",
-        "popup_detail": "#5A5550", "popup_border": "rgba(0,0,0,0.12)",
-    },
-}
-
-T = THEMES[theme]
-
-# ─── Global CSS (theme-driven) ──────────────────────────────
-st.markdown(f"""
+# ─── Apple Light CSS ─────────────────────────────────────────
+# Design tokens (locked — Apple-clean light)
+#   Accent:  #0A84FF   single accent, used identically everywhere
+#   Surface: #FFFFFF    Tile: #F5F5F7
+#   Text:    #1D1D1F    muted #86868B    faint #AEAEB2
+#   Radius:  compact 12px (buttons/inputs/info) · cards 18px · pills 999px
+#   Shadow:  cool-tinted rgba(60,60,67,·) — never pure black
+st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-    * {{ font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important; }}
+    * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important; }
 
-    .stApp {{ background: {T["bg"]}; }}
+    .stApp { background: #FFFFFF; }
 
-    .block-container {{
+    .block-container {
         padding: 2rem 3rem !important;
         max-width: 1400px;
-    }}
+    }
 
-    #MainMenu, footer, header {{ visibility: hidden; }}
-    .stDeployButton {{ display: none; }}
+    #MainMenu, footer, header { visibility: hidden; }
+    .stDeployButton { display: none; }
 
-    .app-header {{
+    .app-header {
         padding: 1.5rem 0 0.5rem 0;
-    }}
-    .app-header h1 {{
+    }
+    .app-header h1 {
         font-size: 2rem;
         font-weight: 700;
-        color: {T["text"]};
+        color: #1D1D1F;
         letter-spacing: -0.03em;
         margin: 0;
-    }}
-    .app-header p {{
+    }
+    .app-header p {
         font-size: 0.9rem;
-        color: {T["muted"]};
+        color: #86868B;
         font-weight: 400;
         margin-top: 0.2rem;
-    }}
+    }
 
-    .card {{
-        background: {T["surface"]};
-        border-radius: {T["radius"]};
+    .card {
+        background: #F5F5F7;
+        border-radius: 18px;
         padding: 1.5rem;
         margin-bottom: 1rem;
-    }}
+    }
 
-    .metric-grid {{
+    .metric-grid {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
         gap: 1rem;
         margin-bottom: 1.5rem;
-    }}
-    .metric-card {{
-        background: {T["card"]};
-        border: 1px solid {T["border"]};
-        border-radius: {T["radius"]};
+    }
+    .metric-card {
+        background: #FFFFFF;
+        border: 1px solid rgba(60,60,67,0.06);
+        border-radius: 18px;
         padding: 1.3rem 1.5rem;
         text-align: left;
-        box-shadow: {T["shadow"]};
+        box-shadow: 0 1px 3px rgba(60,60,67,0.04), 0 6px 16px rgba(60,60,67,0.05);
         transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }}
-    .metric-card:hover {{
+    }
+    .metric-card:hover {
         transform: translateY(-2px);
-        box-shadow: {T["shadow_hover"]};
-    }}
+        box-shadow: 0 2px 6px rgba(60,60,67,0.06), 0 12px 28px rgba(60,60,67,0.09);
+    }
 
     /* Mobile collapse: 4 → 2 → 1 */
-    @media (max-width: 900px) {{
-        .metric-grid {{ grid-template-columns: repeat(2, 1fr); }}
-    }}
-    @media (max-width: 520px) {{
-        .metric-grid {{ grid-template-columns: 1fr; }}
-    }}
-    .metric-label {{
+    @media (max-width: 900px) {
+        .metric-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 520px) {
+        .metric-grid { grid-template-columns: 1fr; }
+    }
+    .metric-label {
         font-size: 0.7rem;
         font-weight: 600;
-        color: {T["muted"]};
+        color: #86868B;
         text-transform: uppercase;
         letter-spacing: 0.05em;
         margin-bottom: 0.4rem;
-    }}
-    .metric-value {{
+    }
+    .metric-value {
         font-size: 2rem;
         font-weight: 700;
-        color: {T["text"]};
+        color: #1D1D1F;
         letter-spacing: -0.02em;
-    }}
-    .metric-sub {{
+    }
+    .metric-sub {
         font-size: 0.75rem;
-        color: {T["muted"]};
+        color: #86868B;
         margin-top: 0.2rem;
-    }}
+    }
 
-    .section-title {{
+    .section-title {
         font-size: 1.1rem;
         font-weight: 600;
-        color: {T["text"]};
+        color: #1D1D1F;
         margin: 1.5rem 0 0.8rem 0;
-        letter-spacing: {T["section_spacing"]};
-        text-transform: {T["section_transform"]};
-    }}
+        letter-spacing: -0.01em;
+    }
 
-    .stDateInput > div > div {{
-        border-radius: {T["radius_sm"]} !important;
-    }}
-    .stButton button {{
-        background: {T["btn_bg"]} !important;
+    .stDateInput > div > div {
+        border-radius: 12px !important;
+    }
+    .stButton button {
+        background: #F5F5F7 !important;
         border: none !important;
-        border-radius: {T["radius_sm"]} !important;
-        color: {T["text"]} !important;
+        border-radius: 12px !important;
+        color: #1D1D1F !important;
         font-weight: 500 !important;
         transition: all 0.2s ease;
-    }}
-    .stButton button:hover {{
-        background: {T["btn_hover"]} !important;
-    }}
-    .stButton button:active {{
+    }
+    .stButton button:hover {
+        background: #E8E8ED !important;
+    }
+    .stButton button:active {
         transform: scale(0.97);
-    }}
+    }
 
-    .insight-text {{
-        color: {T["muted"]};
+    .insight-text {
+        color: #86868B;
         font-size: 0.8rem;
         text-align: center;
         margin-top: 0.3rem;
-    }}
+    }
 
-    .stInfo, .stWarning {{
-        background: {T["surface"]} !important;
+    .stInfo, .stWarning {
+        background: #F5F5F7 !important;
         border: none !important;
-        border-radius: {T["radius_sm"]} !important;
-        color: {T["muted"]} !important;
-    }}
+        border-radius: 12px !important;
+        color: #86868B !important;
+    }
 
-    .habit-card {{
-        background: {T["surface"]};
-        border-radius: {T["radius"]};
+    .habit-card {
+        background: #F5F5F7;
+        border-radius: 18px;
         padding: 1.2rem;
         text-align: center;
-    }}
-    .habit-name {{
+    }
+    .habit-name {
         font-size: 0.7rem;
         font-weight: 600;
-        color: {T["muted"]};
+        color: #86868B;
         text-transform: uppercase;
         letter-spacing: 0.04em;
         margin-bottom: 0.4rem;
-    }}
-    .habit-value {{
+    }
+    .habit-value {
         font-size: 1.8rem;
         font-weight: 700;
-        color: {T["text"]};
         letter-spacing: -0.02em;
-    }}
-    .habit-sub {{
+    }
+    .habit-sub {
         font-size: 0.65rem;
-        color: {T["muted"]};
+        color: #86868B;
         margin-top: 0.15rem;
-    }}
+    }
 
-    .quick-btn {{
+    .quick-btn {
         display: inline-block;
         padding: 0.35rem 0.9rem;
-        background: {T["btn_bg"]};
+        background: #F5F5F7;
         border-radius: 999px;
-        color: {T["text"]};
+        color: #1D1D1F;
         font-size: 0.8rem;
         font-weight: 500;
         cursor: pointer;
         margin-right: 0.4rem;
         text-decoration: none;
-    }}
-    .quick-btn-active {{
-        background: {T["btn_active_bg"]};
-        color: {T["btn_active_text"]};
-    }}
-{f'''
-    /* ─── DARK: Rick Owens structural overrides ─── */
-    .app-header h1 {{
-        font-weight: 300 !important;
-        letter-spacing: 0.12em !important;
-        text-transform: uppercase !important;
-        font-size: 1.6rem !important;
-    }}
-    .app-header p {{
-        font-weight: 300 !important;
-        letter-spacing: 0.08em !important;
-        text-transform: uppercase !important;
-        font-size: 0.7rem !important;
-    }}
-    .section-title {{
-        font-weight: 300 !important;
-        font-size: 0.75rem !important;
-        border-bottom: 1px solid rgba(255,255,255,0.08);
-        padding-bottom: 0.6rem;
-        margin-top: 3rem !important;
-    }}
-    .metric-card {{
-        border: none !important;
-        border-bottom: 1px solid rgba(255,255,255,0.06) !important;
-        padding: 1.5rem 0 !important;
-    }}
-    .metric-card:hover {{
-        transform: none !important;
-    }}
-    .metric-label {{
-        font-weight: 300 !important;
-        letter-spacing: 0.18em !important;
-        font-size: 0.6rem !important;
-    }}
-    .metric-value {{
-        font-weight: 300 !important;
-        font-size: 2.4rem !important;
-        letter-spacing: 0.02em !important;
-    }}
-    .metric-sub {{
-        font-weight: 300 !important;
-        letter-spacing: 0.05em !important;
-    }}
-    .habit-card {{
-        background: transparent !important;
-        border: 1px solid rgba(255,255,255,0.06);
-    }}
-    .habit-name {{
-        font-weight: 300 !important;
-        letter-spacing: 0.15em !important;
-    }}
-    .habit-value {{
-        font-weight: 300 !important;
-    }}
-    .card {{
-        background: transparent !important;
-        border: 1px solid rgba(255,255,255,0.06);
-    }}
-    .stButton button {{
-        border: 1px solid rgba(255,255,255,0.1) !important;
-        font-weight: 300 !important;
-        letter-spacing: 0.1em !important;
-        text-transform: uppercase !important;
-        font-size: 0.7rem !important;
-    }}
-    .quick-btn {{
-        border-radius: 0 !important;
-        border: 1px solid rgba(255,255,255,0.1);
-        font-weight: 300 !important;
-        letter-spacing: 0.1em !important;
-    }}
-    .insight-text {{
-        font-weight: 300 !important;
-        letter-spacing: 0.05em !important;
-    }}
-''' if theme == "dark" else ''}
+    }
+    .quick-btn-active {
+        background: #1D1D1F;
+        color: #FFFFFF;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# ─── Color Palette (dynamic per theme) ──────────────────────
-COLORS_LIGHT = {
+# ─── Apple Color Palette (vibrant on white) ──────────────────
+COLORS = {
     "工作": "#0A84FF",
     "学习": "#5E5CE6",
     "运动": "#FF2D55",
@@ -419,27 +309,10 @@ COLORS_LIGHT = {
     "深度复盘/灵感": "#5E5CE6",
 }
 
-COLORS_DARK = {
-    "工作": "#8A8580",
-    "学习": "#7A7570",
-    "运动": "#D4CFC9",
-    "睡眠": "#5A5550",
-    "社交": "#9A9590",
-    "餐饮": "#6A6560",
-    "生活": "#7A7570",
-    "通勤": "#4A4540",
-    "拖延": "#3A3530",
-    "家庭": "#9A9590",
-    "基础/洗漱": "#3A3530",
-    "深度复盘/灵感": "#8A8580",
-}
-
-COLORS = COLORS_LIGHT if theme == "light" else COLORS_DARK
-
 PLOT_LAYOUT = dict(
     paper_bgcolor="rgba(0,0,0,0)",
     plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(family="Inter, -apple-system, sans-serif", color=T["muted"], size=12),
+    font=dict(family="Inter, -apple-system, sans-serif", color="#86868B", size=12),
     margin=dict(l=20, r=20, t=30, b=30),
 )
 
@@ -457,19 +330,12 @@ def load_data(start_date: date, end_date: date):
 
 
 # ─── Header ──────────────────────────────────────────────────
-_hdr_left, _hdr_right = st.columns([6, 1])
-with _hdr_left:
-    st.markdown("""
-    <div class="app-header">
-        <h1>Life Manager</h1>
-        <p>Personal Performance Analytics</p>
-    </div>
-    """, unsafe_allow_html=True)
-with _hdr_right:
-    _toggle_label = "LIGHT" if theme == "dark" else "DARK"
-    if st.button(_toggle_label, key="_theme_toggle"):
-        st.session_state["theme"] = "light" if theme == "dark" else "dark"
-        st.rerun()
+st.markdown("""
+<div class="app-header">
+    <h1>Life Manager</h1>
+    <p>Personal Performance Analytics</p>
+</div>
+""", unsafe_allow_html=True)
 
 # ─── Date Controls ───────────────────────────────────────────
 today = date.today()
@@ -510,7 +376,7 @@ date_span = (end_date - start_date).days + 1
 if df.empty:
     st.markdown(f"""
     <div class="card" style="text-align:center; padding:3rem;">
-        <p style="color:{T['muted']}; margin:0; font-size:0.9rem;">{start_date.strftime('%m/%d')} — {end_date.strftime('%m/%d')} 暂无数据</p>
+        <p style="color:#86868B; margin:0; font-size:0.9rem;">{start_date.strftime('%m/%d')} — {end_date.strftime('%m/%d')} 暂无数据</p>
     </div>
     """, unsafe_allow_html=True)
     st.stop()
@@ -529,12 +395,12 @@ st.markdown(f"""
 <div class="metric-grid">
     <div class="metric-card">
         <div class="metric-label">记录时长</div>
-        <div class="metric-value">{total_hours:.0f}<span style="font-size:1rem;color:{T['muted']}">h</span></div>
+        <div class="metric-value">{total_hours:.0f}<span style="font-size:1rem;color:#86868B">h</span></div>
         <div class="metric-sub">{active_days} 个活跃日</div>
     </div>
     <div class="metric-card">
         <div class="metric-label">平均评分</div>
-        <div class="metric-value">{avg_score:.1f}<span style="font-size:1rem;color:{T['muted']}">/10</span></div>
+        <div class="metric-value">{avg_score:.1f}<span style="font-size:1rem;color:#86868B">/10</span></div>
         <div class="metric-sub">基于 {len(df['score'].dropna())} 次评价</div>
     </div>
     <div class="metric-card">
@@ -567,14 +433,14 @@ with r1c1:
                 marker=dict(color=color, cornerradius=6),
                 text=f'{row["total_hours"]:.1f}h',
                 textposition="outside",
-                textfont=dict(color=T["text"], size=11),
+                textfont=dict(color="#1D1D1F", size=11),
                 showlegend=False,
             ))
         fig_bar.update_layout(
             **PLOT_LAYOUT,
             height=300,
             barmode="stack",
-            yaxis=dict(categoryorder="total ascending", showgrid=False, color=T["text"]),
+            yaxis=dict(categoryorder="total ascending", showgrid=False, color="#1D1D1F"),
             xaxis=dict(showgrid=False, showticklabels=False),
         )
         st.plotly_chart(fig_bar, use_container_width=True, config={"displayModeBar": False})
@@ -595,13 +461,13 @@ with r1c2:
             text=_pie_text,
             textinfo="text",
             textposition="outside",
-            textfont=dict(size=11, color=T["text"]),
+            textfont=dict(size=11, color="#1D1D1F"),
             hovertemplate="%{label}<br>%{value:.1f}h · %{percent}<extra></extra>",
         )])
         fig_pie.update_layout(**PLOT_LAYOUT, height=300, showlegend=False)
         fig_pie.add_annotation(
             text=f"<b>{total_hours:.0f}h</b>",
-            font=dict(size=20, color=T["text"]),
+            font=dict(size=20, color="#1D1D1F"),
             showarrow=False,
         )
         st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
@@ -617,9 +483,9 @@ if date_span > 1:
             x=daily["date"],
             y=daily["avg_score"],
             mode="lines",
-            line=dict(color=T["accent"], width=2.5, shape="spline"),
+            line=dict(color="#0A84FF", width=2.5, shape="spline"),
             fill="tozeroy",
-            fillcolor=f'{T["accent"]}10',
+            fillcolor="rgba(10, 132, 255, 0.06)",
             hovertemplate="%{x|%m/%d}<br>评分: %{y:.1f}<extra></extra>",
         ))
 
@@ -627,7 +493,7 @@ if date_span > 1:
             x=daily["date"],
             y=daily["avg_score"],
             mode="markers",
-            marker=dict(size=7, color=T["accent"], line=dict(width=2, color=T["bg"])),
+            marker=dict(size=7, color="#0A84FF", line=dict(width=2, color="#FFF")),
             showlegend=False,
             hoverinfo="skip",
         ))
@@ -635,16 +501,16 @@ if date_span > 1:
         fig_trend.add_hline(
             y=avg_score, line_dash="dot", line_color="rgba(142,142,147,0.3)", line_width=1,
             annotation_text=f"平均 {avg_score:.1f}",
-            annotation_font=dict(color=T["muted"], size=11),
+            annotation_font=dict(color="#86868B", size=11),
             annotation_position="right",
         )
 
         fig_trend.update_layout(
             **PLOT_LAYOUT,
             height=280,
-            yaxis=dict(range=[0, 10], showgrid=True, gridcolor=T["border"],
-                       zeroline=False, dtick=2, color=T["text"]),
-            xaxis=dict(showgrid=False, tickformat="%m/%d", color=T["text"]),
+            yaxis=dict(range=[0, 10], showgrid=True, gridcolor="rgba(0,0,0,0.04)",
+                       zeroline=False, dtick=2, color="#1D1D1F"),
+            xaxis=dict(showgrid=False, tickformat="%m/%d", color="#1D1D1F"),
             showlegend=False,
         )
         st.plotly_chart(fig_trend, use_container_width=True, config={"displayModeBar": False})
@@ -705,14 +571,14 @@ heatmap_html = f"""
 <html>
 <head>
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@{"300;400" if theme == "dark" else "400;500;600"}&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
     * {{ margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; }}
     body {{ background: transparent; overflow: hidden; }}
     .hm-container {{
-        background: {T["card"]};
-        border-radius: {T["radius"]};
-        padding: {"2rem 0" if theme == "dark" else "1.5rem 1.8rem"};
-        {"border-top: 1px solid rgba(255,255,255,0.08);" if theme == "dark" else f'box-shadow: {T["card_shadow"]};'}
+        background: #FFFFFF;
+        border-radius: 18px;
+        padding: 1.5rem 1.8rem;
+        box-shadow: 0 2px 20px rgba(60,60,67,0.06), 0 0 1px rgba(60,60,67,0.12);
         overflow-x: {"auto" if needs_scroll else "hidden"};
     }}
     .hm-grid {{
@@ -730,27 +596,26 @@ heatmap_html = f"""
         justify-content: center;
         font-size: {max(9, min(12, cell_size // 2))}px;
         font-weight: 600;
-        color: {T["text"]};
+        color: #1D1D1F;
         line-height: 1.2;
     }}
     .hm-date-label span {{
         font-size: {max(7, min(10, cell_size // 3))}px;
         font-weight: 400;
-        color: {T["muted"]};
+        color: #86868B;
     }}
     .hm-label {{
         font-size: 0.78rem;
-        font-weight: {"300" if theme == "dark" else "500"};
-        color: {T["text"]};
+        font-weight: 500;
+        color: #1D1D1F;
         text-align: right;
         padding-right: 0.8rem;
         white-space: nowrap;
-        {"letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.6rem;" if theme == "dark" else ""}
     }}
     .hm-cell {{
         width: {cell_size}px;
         height: {cell_size}px;
-        border-radius: {"0" if theme == "dark" else f"{max(3, cell_size // 7)}px"};
+        border-radius: {max(3, cell_size // 7)}px;
         transition: transform 0.15s ease, box-shadow 0.15s ease;
         cursor: default;
         position: relative;
@@ -758,25 +623,24 @@ heatmap_html = f"""
     }}
     .hm-cell:hover {{
         transform: scale(1.2);
-        {"box-shadow: none;" if theme == "dark" else "box-shadow: 0 4px 12px rgba(60,60,67,0.14);"}
+        box-shadow: 0 4px 12px rgba(60,60,67,0.14);
         z-index: 10;
     }}
-    .hm-active {{ background: {T["hm_active"]}; }}
-    .hm-empty {{ background: {T["hm_empty"]}; }}
+    .hm-active {{ background: #34C759; }}
+    .hm-empty {{ background: #E5E5EA; }}
     .hm-streak {{
         font-size: 0.65rem;
-        color: {T["muted"]};
-        font-weight: {"300" if theme == "dark" else "500"};
+        color: #86868B;
+        font-weight: 500;
         padding-left: 0.5rem;
         white-space: nowrap;
-        {"letter-spacing: 0.08em;" if theme == "dark" else ""}
     }}
     .hm-spacer {{ pointer-events: none; }}
     #hm-popup {{
         display: none;
         position: fixed;
-        background: {T["popup_bg"]};
-        color: {T["popup_text"]};
+        background: #1D1D1F;
+        color: #FFFFFF;
         border-radius: 10px;
         padding: 0.6rem 0.9rem;
         font-size: 0.72rem;
@@ -791,22 +655,22 @@ heatmap_html = f"""
         margin-bottom: 0.2rem;
     }}
     #hm-popup .pop-score {{
-        color: {T["popup_score"]};
+        color: #34C759;
         font-weight: 600;
         margin-bottom: 0.3rem;
     }}
     #hm-popup .pop-detail {{
-        border-top: 1px solid {T["popup_border"]};
+        border-top: 1px solid rgba(255,255,255,0.15);
         padding-top: 0.35rem;
         margin-top: 0.2rem;
     }}
     #hm-popup .pop-detail-line {{
-        color: {T["popup_detail"]};
+        color: #E5E5EA;
         line-height: 1.5;
         font-size: 0.68rem;
     }}
     #hm-popup .pop-empty {{
-        color: {T["muted"]};
+        color: #86868B;
         font-style: italic;
     }}
 </style>
@@ -887,10 +751,10 @@ if insights["suggestions"]:
         * {{ margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; }}
         body {{ background: transparent; }}
         .ri-card {{
-            background: {T["card"]};
-            border-radius: {T["radius"]};
-            padding: {"2rem 0" if theme == "dark" else "1.8rem 2rem"};
-            {"border-top: 1px solid rgba(255,255,255,0.08);" if theme == "dark" else f'box-shadow: {T["card_shadow"]};'}
+            background: #FFFFFF;
+            border-radius: 18px;
+            padding: 1.8rem 2rem;
+            box-shadow: 0 1px 12px rgba(60,60,67,0.05), 0 0 1px rgba(60,60,67,0.10);
         }}
         .ri-header {{
             display: flex;
@@ -899,51 +763,47 @@ if insights["suggestions"]:
             margin-bottom: 1.2rem;
         }}
         .ri-title {{
-            font-size: {"0.7rem" if theme == "dark" else "0.95rem"};
-            font-weight: {"300" if theme == "dark" else "600"};
-            color: {T["accent"]};
-            {"letter-spacing: 0.2em; text-transform: uppercase;" if theme == "dark" else ""}
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #0A84FF;
         }}
         .ri-date {{
             font-size: 0.7rem;
-            font-weight: {"300" if theme == "dark" else "500"};
-            color: {T["muted"]};
-            background: {T["surface"]};
+            font-weight: 500;
+            color: #86868B;
+            background: #F5F5F7;
             padding: 0.25rem 0.7rem;
-            border-radius: {"0" if theme == "dark" else "999px"};
-            {"border: 1px solid rgba(255,255,255,0.08);" if theme == "dark" else ""}
+            border-radius: 999px;
         }}
         .ri-source {{
             font-size: 0.7rem;
-            color: {T["faint"]};
+            color: #AEAEB2;
             margin-bottom: 1rem;
-            font-weight: {"300" if theme == "dark" else "400"};
-            {"letter-spacing: 0.05em;" if theme == "dark" else ""}
+            font-weight: 400;
         }}
         .ri-item {{
             display: flex;
             align-items: flex-start;
             gap: 0.75rem;
             padding: 0.65rem 0;
-            border-bottom: 1px solid {T["border"]};
+            border-bottom: 1px solid rgba(0,0,0,0.03);
             opacity: 0;
             animation: fadeIn 0.35s ease forwards;
         }}
         .ri-item:last-child {{ border-bottom: none; }}
         .ri-bullet {{
-            width: {"5px" if theme == "dark" else "7px"};
-            height: {"5px" if theme == "dark" else "7px"};
-            min-width: {"5px" if theme == "dark" else "7px"};
-            border-radius: {"0" if theme == "dark" else "50%"};
-            background: {T["accent"]};
-            margin-top: 0.5rem;
+            width: 7px;
+            height: 7px;
+            min-width: 7px;
+            border-radius: 50%;
+            background: #0A84FF;
+            margin-top: 0.45rem;
         }}
         .ri-item span {{
             font-size: 0.82rem;
-            font-weight: {"300" if theme == "dark" else "400"};
-            color: {T["text"]};
+            font-weight: 400;
+            color: #1D1D1F;
             line-height: 1.55;
-            {"letter-spacing: 0.02em;" if theme == "dark" else ""}
         }}
         @keyframes fadeIn {{
             from {{ opacity: 0; transform: translateY(4px); }}
@@ -967,31 +827,31 @@ if insights["suggestions"]:
     components.html(reflection_html, height=ri_height, scrolling=False)
 
 else:
-    empty_html = f"""
+    empty_html = """
     <!DOCTYPE html>
     <html>
     <head>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
-        * {{ margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; }}
-        body {{ background: transparent; }}
-        .ri-card {{
-            background: {T["card"]};
-            border-radius: {T["radius"]};
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; }
+        body { background: transparent; }
+        .ri-card {
+            background: #FFFFFF;
+            border-radius: 18px;
             padding: 2.5rem 2rem;
-            box-shadow: {T["card_shadow"]};
+            box-shadow: 0 1px 12px rgba(60,60,67,0.05), 0 0 1px rgba(60,60,67,0.10);
             text-align: center;
-        }}
-        .ri-empty-icon {{
+        }
+        .ri-empty-icon {
             font-size: 2rem;
             margin-bottom: 0.6rem;
             opacity: 0.4;
-        }}
-        .ri-empty-text {{
+        }
+        .ri-empty-text {
             font-size: 0.85rem;
-            color: {T["faint"]};
+            color: #AEAEB2;
             font-weight: 400;
-        }}
+        }
     </style>
     </head>
     <body>
@@ -1020,7 +880,7 @@ if not corr_data.empty and len(corr_data) >= 3:
             color=corr_data["work_score"],
             colorscale=[[0, "#FF3B30"], [0.5, "#FF9500"], [1, "#34C759"]],
             cmin=0, cmax=10,
-            line=dict(width=1.5, color=T["bg"]),
+            line=dict(width=1.5, color="#FFFFFF"),
         ),
         hovertemplate="睡眠: %{x:.1f}h<br>工作评分: %{y:.1f}<extra></extra>",
     ))
@@ -1041,10 +901,10 @@ if not corr_data.empty and len(corr_data) >= 3:
     fig_corr.update_layout(
         **PLOT_LAYOUT,
         height=300,
-        xaxis=dict(title="睡眠时长 (h)", showgrid=True, gridcolor=T["border"],
-                   zeroline=False, color=T["text"]),
-        yaxis=dict(title="次日工作评分", showgrid=True, gridcolor=T["border"],
-                   range=[0, 10], zeroline=False, color=T["text"]),
+        xaxis=dict(title="睡眠时长 (h)", showgrid=True, gridcolor="rgba(0,0,0,0.04)",
+                   zeroline=False, color="#1D1D1F"),
+        yaxis=dict(title="次日工作评分", showgrid=True, gridcolor="rgba(0,0,0,0.04)",
+                   range=[0, 10], zeroline=False, color="#1D1D1F"),
         showlegend=False,
     )
     st.plotly_chart(fig_corr, use_container_width=True, config={"displayModeBar": False})
@@ -1060,9 +920,9 @@ if not corr_data.empty and len(corr_data) >= 3:
 else:
     st.markdown("""
     <div class="card" style="text-align:center;">
-        <p style="color:{T['muted']}; margin:0; font-size:0.85rem;">需要至少 3 天睡眠+工作数据才能分析</p>
+        <p style="color:#86868B; margin:0; font-size:0.85rem;">需要至少 3 天睡眠+工作数据才能分析</p>
     </div>
     """, unsafe_allow_html=True)
 
 # ─── Footer ──────────────────────────────────────────────────
-st.markdown(f'<br><p style="color:{T["faint"]}; text-align:center; font-size:0.7rem;">Life Manager v0.3 · dark/light</p>', unsafe_allow_html=True)
+st.markdown('<br><p style="color:#D1D1D6; text-align:center; font-size:0.7rem;">Life Manager v0.2 · 界面精修</p>', unsafe_allow_html=True)
