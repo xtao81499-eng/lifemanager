@@ -1,0 +1,18 @@
+# Secrets
+.env
+config/credentials.json
+config/token.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Data cache
+data/*.json
+data/*.csv
