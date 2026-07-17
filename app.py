@@ -18,6 +18,7 @@ from core.data_processing import (
     sleep_work_correlation,
 )
 from core.gdrive import get_reflection_insights
+from core.manual_habits import get_checked_dates, toggle as toggle_habit
 
 # ─── Page Config ─────────────────────────────────────────────
 st.set_page_config(
@@ -293,20 +294,20 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ─── Apple Color Palette (vibrant on white) ──────────────────
+# ─── Color Palette (matching Google Calendar) ────────────────
 COLORS = {
-    "工作": "#0A84FF",
-    "学习": "#5E5CE6",
-    "运动": "#FF2D55",
-    "睡眠": "#AF52DE",
-    "社交": "#FF9500",
-    "餐饮": "#34C759",
-    "生活": "#5AC8FA",
-    "通勤": "#A2845E",
-    "拖延": "#FF3B30",
-    "家庭": "#FF2D55",
-    "基础/洗漱": "#8E8E93",
-    "深度复盘/灵感": "#5E5CE6",
+    "工作": "#f83a22",
+    "学习": "#16a765",
+    "运动": "#039be5",
+    "睡眠": "#3f51b5",
+    "社交": "#9a9cff",
+    "餐饮": "#33b679",
+    "生活": "#fbd14a",
+    "通勤": "#b4b8b1",
+    "拖延": "#b99aff",
+    "家庭": "#f4511e",
+    "基础/洗漱": "#33b679",
+    "深度复盘/灵感": "#9fe1e7",
 }
 
 PLOT_LAYOUT = dict(
@@ -518,6 +519,17 @@ if date_span > 1:
 # ─── Row 3: Habit Heatmap (iOS-style grid) ──────────────────
 st.markdown('<div class="section-title">习惯追踪</div>', unsafe_allow_html=True)
 
+# Handle manual habit toggle via query params
+_toggle_param = st.query_params.get("_habit_toggle")
+if _toggle_param:
+    parts = _toggle_param.split("|", 1)
+    if len(parts) == 2:
+        toggle_habit(parts[0], parts[1])
+    st.query_params.clear()
+    st.rerun()
+
+manual_habits = ["睡前护肤"]
+
 heatmap_cats = ["运动", "学习", "深度复盘/灵感"]
 heatmap_data = df[df["category"].isin(heatmap_cats)].copy()
 date_range = pd.date_range(start=start_date, end=end_date, freq="D")
@@ -554,6 +566,31 @@ for cat_name in heatmap_cats:
         <div class="hm-streak">{streak_text}</div>
     """
 
+# Manual habit rows (clickable, local storage)
+for habit_name in manual_habits:
+    checked_dates = get_checked_dates(habit_name)
+    manual_cells_parts = []
+    manual_active = 0
+    for d in date_range:
+        date_iso = d.strftime("%Y-%m-%d")
+        date_display = d.strftime("%m月%d日")
+        if date_iso in checked_dates:
+            manual_cells_parts.append(
+                f'<div class="hm-cell hm-active hm-manual" data-habit="{habit_name}" data-iso="{date_iso}" data-date="{date_display}"></div>'
+            )
+            manual_active += 1
+        else:
+            manual_cells_parts.append(
+                f'<div class="hm-cell hm-empty hm-manual" data-habit="{habit_name}" data-iso="{date_iso}" data-date="{date_display}"></div>'
+            )
+    manual_cells_all = "".join(manual_cells_parts)
+    manual_streak = f"{manual_active}/{len(date_range)}"
+    grid_rows_html += f"""
+        <div class="hm-label">{habit_name}</div>
+        {manual_cells_all}
+        <div class="hm-streak">{manual_streak}</div>
+    """
+
 # Date header row
 date_header_html = ""
 for d in date_range:
@@ -563,7 +600,7 @@ for d in date_range:
 num_days = len(date_range)
 cell_size = max(16, min(28, 700 // num_days))
 grid_width = 88 + num_days * (cell_size + 3) + 60
-grid_height = 80 + len(heatmap_cats) * (cell_size + 12) + 20
+grid_height = 80 + (len(heatmap_cats) + len(manual_habits)) * (cell_size + 12) + 20
 needs_scroll = grid_width > 900
 
 heatmap_html = f"""
@@ -628,6 +665,7 @@ heatmap_html = f"""
     }}
     .hm-active {{ background: #34C759; }}
     .hm-empty {{ background: #E5E5EA; }}
+    .hm-manual {{ cursor: pointer; }}
     .hm-streak {{
         font-size: 0.65rem;
         color: #86868B;
@@ -710,6 +748,13 @@ document.querySelectorAll('.hm-cell').forEach(cell => {{
     cell.addEventListener('mouseleave', () => {{
         popup.style.display = 'none';
     }});
+    if (cell.classList.contains('hm-manual')) {{
+        cell.addEventListener('click', () => {{
+            const habit = cell.dataset.habit;
+            const iso = cell.dataset.iso;
+            window.parent.location.href = window.parent.location.pathname + '?_habit_toggle=' + encodeURIComponent(habit + '|' + iso);
+        }});
+    }}
 }});
 </script>
 </body>

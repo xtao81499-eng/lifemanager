@@ -20,6 +20,7 @@ from urllib3.util.retry import Retry
 SCOPES = [
     "https://www.googleapis.com/auth/calendar.readonly",
     "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/drive.file",
 ]
 
 CONFIG_DIR = Path(__file__).parent.parent / "config"
