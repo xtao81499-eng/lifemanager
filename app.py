@@ -580,9 +580,10 @@ heatmap_html = f"""
     .hm-container {{
         background: #FFFFFF;
         border-radius: 18px;
-        padding: 1.5rem 1.8rem;
+        padding: 1.5rem 1.8rem 4rem;
         box-shadow: 0 2px 20px rgba(60,60,67,0.06), 0 0 1px rgba(60,60,67,0.12);
         overflow-x: {"auto" if needs_scroll else "hidden"};
+        overflow-y: visible;
     }}
     .hm-grid {{
         display: inline-grid;
@@ -642,7 +643,7 @@ heatmap_html = f"""
     .hm-cell[data-tip]:hover::after {{
         content: attr(data-tip);
         position: absolute;
-        bottom: calc(100% + 8px);
+        top: calc(100% + 8px);
         left: 50%;
         transform: translateX(-50%);
         background: #1D1D1F;
@@ -660,11 +661,11 @@ heatmap_html = f"""
     .hm-cell[data-tip]:hover::before {{
         content: '';
         position: absolute;
-        bottom: calc(100% + 2px);
+        top: calc(100% + 2px);
         left: 50%;
         transform: translateX(-50%);
         border: 5px solid transparent;
-        border-top-color: #1D1D1F;
+        border-bottom-color: #1D1D1F;
         z-index: 1000;
         pointer-events: none;
     }}
@@ -683,7 +684,7 @@ heatmap_html = f"""
 </html>
 """
 
-components.html(heatmap_html, height=grid_height + (20 if needs_scroll else 0), scrolling=False)
+components.html(heatmap_html, height=grid_height + 80 + (20 if needs_scroll else 0), scrolling=False)
 
 
 # ─── Row 4: Reflection Insights ────────────────────────────
