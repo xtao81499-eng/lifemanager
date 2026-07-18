@@ -530,22 +530,6 @@ if _toggle_param:
 
 manual_habits = ["睡前护肤"]
 
-# Manual habit toggle — today's check-in (above heatmap for visibility)
-def _do_toggle(habit, d):
-    toggle_habit(habit, d)
-
-for habit_name in manual_habits:
-    today_iso = date.today().strftime("%Y-%m-%d")
-    checked_dates = get_checked_dates(habit_name)
-    is_checked = today_iso in checked_dates
-    st.toggle(
-        f"{habit_name} · 今日打卡",
-        value=is_checked,
-        key=f"htoggle_{habit_name}",
-        on_change=_do_toggle,
-        args=(habit_name, today_iso),
-    )
-
 heatmap_cats = ["运动", "学习", "深度复盘/灵感"]
 heatmap_data = df[df["category"].isin(heatmap_cats)].copy()
 date_range = pd.date_range(start=start_date, end=end_date, freq="D")
@@ -766,6 +750,18 @@ document.querySelectorAll('.hm-cell').forEach(cell => {{
     }});
     if (cell.classList.contains('hm-manual')) {{
         cell.style.cursor = 'pointer';
+        cell.addEventListener('click', () => {{
+            const habit = cell.dataset.habit;
+            const iso = cell.dataset.iso;
+            if (cell.classList.contains('hm-active')) {{
+                cell.classList.remove('hm-active');
+                cell.classList.add('hm-empty');
+            }} else {{
+                cell.classList.remove('hm-empty');
+                cell.classList.add('hm-active');
+            }}
+            window.parent.postMessage({{type: 'habit_toggle', habit: habit, iso: iso}}, '*');
+        }});
     }}
 }});
 </script>
@@ -774,6 +770,20 @@ document.querySelectorAll('.hm-cell').forEach(cell => {{
 """
 
 components.html(heatmap_html, height=grid_height + 60 + (20 if needs_scroll else 0), scrolling=False)
+
+# Listener: receives postMessage from heatmap iframe and navigates parent
+_listener_js = """
+<script>
+window.addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'habit_toggle') {
+        const url = new URL(window.location);
+        url.searchParams.set('_habit_toggle', e.data.habit + '|' + e.data.iso);
+        window.location.href = url.toString();
+    }
+});
+</script>
+"""
+components.html(_listener_js, height=0)
 
 
 # ─── Row 4: Reflection Insights ────────────────────────────
