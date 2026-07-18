@@ -530,6 +530,22 @@ if _toggle_param:
 
 manual_habits = ["睡前护肤"]
 
+# Manual habit toggle — today's check-in (above heatmap for visibility)
+def _do_toggle(habit, d):
+    toggle_habit(habit, d)
+
+for habit_name in manual_habits:
+    today_iso = date.today().strftime("%Y-%m-%d")
+    checked_dates = get_checked_dates(habit_name)
+    is_checked = today_iso in checked_dates
+    st.toggle(
+        f"{habit_name} · 今日打卡",
+        value=is_checked,
+        key=f"htoggle_{habit_name}",
+        on_change=_do_toggle,
+        args=(habit_name, today_iso),
+    )
+
 heatmap_cats = ["运动", "学习", "深度复盘/灵感"]
 heatmap_data = df[df["category"].isin(heatmap_cats)].copy()
 date_range = pd.date_range(start=start_date, end=end_date, freq="D")
@@ -749,11 +765,7 @@ document.querySelectorAll('.hm-cell').forEach(cell => {{
         popup.style.display = 'none';
     }});
     if (cell.classList.contains('hm-manual')) {{
-        cell.addEventListener('click', () => {{
-            const habit = cell.dataset.habit;
-            const iso = cell.dataset.iso;
-            window.parent.location.href = window.parent.location.pathname + '?_habit_toggle=' + encodeURIComponent(habit + '|' + iso);
-        }});
+        cell.style.cursor = 'pointer';
     }}
 }});
 </script>
