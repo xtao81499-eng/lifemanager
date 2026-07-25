@@ -326,6 +326,7 @@ def load_data(start_date: date, end_date: date):
     df = events_to_dataframe(events)
     if df.empty:
         return df
+    df = df[df["category"].isin(COLORS.keys())]
     mask = (df["date"].dt.date >= start_date) & (df["date"].dt.date <= end_date)
     return df[mask].reset_index(drop=True)
 
