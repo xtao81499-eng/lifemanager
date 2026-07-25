@@ -550,7 +550,8 @@ for cat_name in heatmap_cats:
     for d in date_range:
         if d in daily_scores.index:
             date_str = d.strftime("%m月%d日")
-            score_val = f"{daily_scores[d]:.1f}" if pd.notna(daily_scores[d]) else ""
+            raw_score = daily_scores[d]
+            score_val = f"{raw_score:.1f}" if pd.notna(raw_score) and raw_score == raw_score else ""
             detail_text = str(daily_details.get(d, "")).strip() if d in daily_details.index else ""
             attrs = f'data-date="{date_str}" data-score="{score_val}" data-detail="{_html.escape(detail_text)}"'
             cells_html_parts.append(f'<div class="hm-cell hm-active" {attrs}></div>')
