@@ -520,15 +520,6 @@ if date_span > 1:
 # ─── Row 3: Habit Heatmap (iOS-style grid) ──────────────────
 st.markdown('<div class="section-title">习惯追踪</div>', unsafe_allow_html=True)
 
-# Handle manual habit toggle via query params
-_toggle_param = st.query_params.get("_habit_toggle")
-if _toggle_param:
-    parts = _toggle_param.split("|", 1)
-    if len(parts) == 2:
-        toggle_habit(parts[0], parts[1])
-    st.query_params.clear()
-    st.rerun()
-
 manual_habits = ["睡前护肤"]
 
 heatmap_cats = ["运动", "学习", "深度复盘/灵感"]
@@ -536,256 +527,59 @@ heatmap_data = df[df["category"].isin(heatmap_cats)].copy()
 date_range = pd.date_range(start=start_date, end=end_date, freq="D")
 weekday_labels = ["一", "二", "三", "四", "五", "六", "日"]
 
-# Build grid data: for each habit × each date, check if active & get score
+# Build grid data as dict for custom component
 import html as _html
-import json as _json
-grid_rows_html = ""
+dates_info = []
+for d in date_range:
+    dates_info.append({
+        "day": d.strftime("%d"),
+        "weekday": weekday_labels[d.weekday()],
+        "iso": d.strftime("%Y-%m-%d"),
+    })
+
+rows = []
 for cat_name in heatmap_cats:
     cat_events = heatmap_data[heatmap_data["category"] == cat_name]
     daily_scores = cat_events.groupby("date")["score"].mean()
     daily_details = cat_events.groupby("date")["detail"].apply(
         lambda x: "\n".join(s.strip() for s in x if str(s).strip())
     ) if "detail" in cat_events.columns else pd.Series(dtype=str)
-
-    cells_html_parts = []
+    cells = []
+    active_count = 0
     for d in date_range:
         if d in daily_scores.index:
-            date_str = d.strftime("%m月%d日")
             raw_score = daily_scores[d]
             score_val = f"{raw_score:.1f}" if pd.notna(raw_score) and raw_score == raw_score else ""
             detail_text = str(daily_details.get(d, "")).strip() if d in daily_details.index else ""
-            attrs = f'data-date="{date_str}" data-score="{score_val}" data-detail="{_html.escape(detail_text)}"'
-            cells_html_parts.append(f'<div class="hm-cell hm-active" {attrs}></div>')
+            cells.append({"active": True, "score": score_val, "detail": detail_text, "date_display": d.strftime("%m月%d日")})
+            active_count += 1
         else:
-            date_str = d.strftime("%m月%d日")
-            cells_html_parts.append(f'<div class="hm-cell hm-empty" data-date="{date_str}"></div>')
-    cells_all = "".join(cells_html_parts)
-    active_count = sum(1 for d in date_range if d in daily_scores.index)
-    streak_text = f"{active_count}/{len(date_range)}"
-    grid_rows_html += f"""
-        <div class="hm-label">{cat_name}</div>
-        {cells_all}
-        <div class="hm-streak">{streak_text}</div>
-    """
+            cells.append({"active": False, "score": "", "detail": "", "date_display": d.strftime("%m月%d日")})
+    rows.append({"label": cat_name, "cells": cells, "streak": f"{active_count}/{len(date_range)}", "manual": False})
 
-# Manual habit rows (clickable, local storage)
 for habit_name in manual_habits:
     checked_dates = get_checked_dates(habit_name)
-    manual_cells_parts = []
-    manual_active = 0
+    cells = []
+    active_count = 0
     for d in date_range:
         date_iso = d.strftime("%Y-%m-%d")
-        date_display = d.strftime("%m月%d日")
-        if date_iso in checked_dates:
-            manual_cells_parts.append(
-                f'<div class="hm-cell hm-active hm-manual" data-habit="{habit_name}" data-iso="{date_iso}" data-date="{date_display}"></div>'
-            )
-            manual_active += 1
-        else:
-            manual_cells_parts.append(
-                f'<div class="hm-cell hm-empty hm-manual" data-habit="{habit_name}" data-iso="{date_iso}" data-date="{date_display}"></div>'
-            )
-    manual_cells_all = "".join(manual_cells_parts)
-    manual_streak = f"{manual_active}/{len(date_range)}"
-    grid_rows_html += f"""
-        <div class="hm-label">{habit_name}</div>
-        {manual_cells_all}
-        <div class="hm-streak">{manual_streak}</div>
-    """
+        is_checked = date_iso in checked_dates
+        cells.append({"active": is_checked, "score": "", "detail": "", "date_display": d.strftime("%m月%d日")})
+        if is_checked:
+            active_count += 1
+    rows.append({"label": habit_name, "cells": cells, "streak": f"{active_count}/{len(date_range)}", "manual": True})
 
-# Date header row
-date_header_html = ""
-for d in date_range:
-    wd = d.weekday()
-    date_header_html += f'<div class="hm-date-label">{d.strftime("%d")}<br><span>{weekday_labels[wd]}</span></div>'
-
-num_days = len(date_range)
-cell_size = max(16, min(28, 700 // num_days))
-grid_width = 88 + num_days * (cell_size + 3) + 60
-grid_height = 80 + (len(heatmap_cats) + len(manual_habits)) * (cell_size + 12) + 20
-needs_scroll = grid_width > 900
-
-heatmap_html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
-    * {{ margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; }}
-    body {{ background: transparent; overflow: hidden; }}
-    .hm-container {{
-        background: #FFFFFF;
-        border-radius: 18px;
-        padding: 1.5rem 1.8rem;
-        box-shadow: 0 2px 20px rgba(60,60,67,0.06), 0 0 1px rgba(60,60,67,0.12);
-        overflow-x: {"auto" if needs_scroll else "hidden"};
-    }}
-    .hm-grid {{
-        display: inline-grid;
-        grid-template-columns: 5.5rem repeat({num_days}, {cell_size}px) auto;
-        column-gap: 3px;
-        row-gap: 4px;
-        align-items: center;
-        min-width: {"{}px".format(grid_width) if needs_scroll else "100%"};
-    }}
-    .hm-date-label {{
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        font-size: {max(9, min(12, cell_size // 2))}px;
-        font-weight: 600;
-        color: #1D1D1F;
-        line-height: 1.2;
-    }}
-    .hm-date-label span {{
-        font-size: {max(7, min(10, cell_size // 3))}px;
-        font-weight: 400;
-        color: #86868B;
-    }}
-    .hm-label {{
-        font-size: 0.78rem;
-        font-weight: 500;
-        color: #1D1D1F;
-        text-align: right;
-        padding-right: 0.8rem;
-        white-space: nowrap;
-    }}
-    .hm-cell {{
-        width: {cell_size}px;
-        height: {cell_size}px;
-        border-radius: {max(3, cell_size // 7)}px;
-        transition: transform 0.15s ease, box-shadow 0.15s ease;
-        cursor: default;
-        position: relative;
-        justify-self: center;
-    }}
-    .hm-cell:hover {{
-        transform: scale(1.2);
-        box-shadow: 0 4px 12px rgba(60,60,67,0.14);
-        z-index: 10;
-    }}
-    .hm-active {{ background: #34C759; }}
-    .hm-empty {{ background: #E5E5EA; }}
-    .hm-manual {{ cursor: pointer; }}
-    .hm-streak {{
-        font-size: 0.65rem;
-        color: #86868B;
-        font-weight: 500;
-        padding-left: 0.5rem;
-        white-space: nowrap;
-    }}
-    .hm-spacer {{ pointer-events: none; }}
-    #hm-popup {{
-        display: none;
-        position: fixed;
-        background: #1D1D1F;
-        color: #FFFFFF;
-        border-radius: 10px;
-        padding: 0.6rem 0.9rem;
-        font-size: 0.72rem;
-        z-index: 9999;
-        pointer-events: none;
-        min-width: 100px;
-        max-width: 200px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.25);
-    }}
-    #hm-popup .pop-date {{
-        font-weight: 600;
-        margin-bottom: 0.2rem;
-    }}
-    #hm-popup .pop-score {{
-        color: #34C759;
-        font-weight: 600;
-        margin-bottom: 0.3rem;
-    }}
-    #hm-popup .pop-detail {{
-        border-top: 1px solid rgba(255,255,255,0.15);
-        padding-top: 0.35rem;
-        margin-top: 0.2rem;
-    }}
-    #hm-popup .pop-detail-line {{
-        color: #E5E5EA;
-        line-height: 1.5;
-        font-size: 0.68rem;
-    }}
-    #hm-popup .pop-empty {{
-        color: #86868B;
-        font-style: italic;
-    }}
-</style>
-</head>
-<body>
-<div class="hm-container">
-    <div class="hm-grid">
-        <div class="hm-spacer"></div>
-        {date_header_html}
-        <div class="hm-spacer"></div>
-        {grid_rows_html}
-    </div>
-</div>
-<div id="hm-popup"></div>
-<script>
-const popup = document.getElementById('hm-popup');
-document.querySelectorAll('.hm-cell').forEach(cell => {{
-    cell.addEventListener('mouseenter', e => {{
-        const date = cell.dataset.date || '';
-        const score = cell.dataset.score || '';
-        const detail = cell.dataset.detail || '';
-        if (!date) return;
-        let html = '<div class="pop-date">' + date + '</div>';
-        if (score) html += '<div class="pop-score">' + score + '/10</div>';
-        else if (cell.classList.contains('hm-active')) html += '<div class="pop-score">已完成</div>';
-        else html += '<div class="pop-empty">未记录</div>';
-        if (detail) {{
-            const lines = detail.split('\\n').filter(l => l.trim());
-            html += '<div class="pop-detail">' + lines.map(l => '<div class="pop-detail-line">' + l + '</div>').join('') + '</div>';
-        }}
-        popup.innerHTML = html;
-        popup.style.display = 'block';
-        const rect = cell.getBoundingClientRect();
-        popup.style.left = (rect.left + rect.width/2 - popup.offsetWidth/2) + 'px';
-        popup.style.top = (rect.bottom + 8) + 'px';
-    }});
-    cell.addEventListener('mouseleave', () => {{
-        popup.style.display = 'none';
-    }});
-    if (cell.classList.contains('hm-manual')) {{
-        cell.style.cursor = 'pointer';
-        cell.addEventListener('click', () => {{
-            const habit = cell.dataset.habit;
-            const iso = cell.dataset.iso;
-            if (cell.classList.contains('hm-active')) {{
-                cell.classList.remove('hm-active');
-                cell.classList.add('hm-empty');
-            }} else {{
-                cell.classList.remove('hm-empty');
-                cell.classList.add('hm-active');
-            }}
-            window.parent.postMessage({{type: 'habit_toggle', habit: habit, iso: iso}}, '*');
-        }});
-    }}
-}});
-</script>
-</body>
-</html>
-"""
-
-components.html(heatmap_html, height=grid_height + 60 + (20 if needs_scroll else 0), scrolling=False)
-
-# Listener: receives postMessage from heatmap iframe and navigates parent
-_listener_js = """
-<script>
-window.addEventListener('message', function(e) {
-    if (e.data && e.data.type === 'habit_toggle') {
-        const url = new URL(window.location);
-        url.searchParams.set('_habit_toggle', e.data.habit + '|' + e.data.iso);
-        window.location.href = url.toString();
-    }
-});
-</script>
-"""
-components.html(_listener_js, height=0)
+from components.heatmap import habit_heatmap
+grid_data = {"dates": dates_info, "rows": rows}
+num_rows = len(heatmap_cats) + len(manual_habits)
+hm_height = 80 + num_rows * 40 + 20
+toggle_result = habit_heatmap(grid_data, height=hm_height, key="habit_heatmap")
+if toggle_result and toggle_result != st.session_state.get("_last_toggle"):
+    st.session_state["_last_toggle"] = toggle_result
+    parts = toggle_result.split("|", 2)
+    if len(parts) >= 2:
+        toggle_habit(parts[0], parts[1])
+        st.rerun()
 
 
 # ─── Row 4: Reflection Insights ────────────────────────────

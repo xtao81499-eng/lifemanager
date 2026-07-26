@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; background: transparent; }
+.hm-container { overflow-x: auto; padding: 8px 0; }
+.hm-grid { display: grid; gap: 6px; align-items: center; }
+.hm-header { font-size: 11px; color: #86868B; text-align: center; }
+.hm-subheader { font-size: 9px; color: #AEAEB2; text-align: center; }
+.hm-label { font-size: 13px; color: #1D1D1F; white-space: nowrap; padding-right: 8px; text-align: right; }
+.hm-streak { font-size: 11px; color: #86868B; text-align: center; padding-left: 4px; }
+.hm-cell { width: 22px; height: 22px; border-radius: 5px; }
+.hm-active { background: #34C759; }
+.hm-empty { background: #E5E5EA; }
+.hm-manual { cursor: pointer; transition: transform 0.1s; }
+.hm-manual:active { transform: scale(0.85); }
+.pop { position: fixed; background: #fff; border-radius: 12px; padding: 10px 14px; box-shadow: 0 4px 24px rgba(0,0,0,0.13); display: none; z-index: 9999; pointer-events: none; font-size: 12px; max-width: 220px; }
+.pop-title { font-weight: 600; color: #1D1D1F; margin-bottom: 2px; }
+.pop-score { color: #86868B; }
+.pop-detail { margin-top: 4px; color: #515154; }
+.pop-detail-line { margin-bottom: 2px; }
+</style>
+</head>
+<body>
+<div class="hm-container"><div class="hm-grid" id="grid"></div></div>
+<div class="pop" id="popup"></div>
+<script src="streamlit-component-lib.js"></script>
+<script>
+function onRender(event) {
+    const data = event.detail.args.grid_data;
+    const cols = data.dates.length;
+    const grid = document.getElementById("grid");
+    grid.innerHTML = "";
+    grid.style.gridTemplateColumns = "90px " + "28px ".repeat(cols) + " 50px";
+
+    // Header row: day numbers
+    grid.appendChild(el("div", "hm-header", ""));
+    data.dates.forEach(d => {
+        const h = el("div", "hm-header", d.day);
+        grid.appendChild(h);
+    });
+    grid.appendChild(el("div", "hm-header", ""));
+
+    // Subheader row: weekday
+    grid.appendChild(el("div", "hm-subheader", ""));
+    data.dates.forEach(d => {
+        grid.appendChild(el("div", "hm-subheader", d.weekday));
+    });
+    grid.appendChild(el("div", "hm-subheader", ""));
+
+    // Category rows
+    data.rows.forEach(row => {
+        grid.appendChild(el("div", "hm-label", row.label));
+        row.cells.forEach((c, i) => {
+            const cell = document.createElement("div");
+            cell.className = "hm-cell " + (c.active ? "hm-active" : "hm-empty") + (row.manual ? " hm-manual" : "");
+            if (row.manual) {
+                cell.dataset.habit = row.label;
+                cell.dataset.iso = data.dates[i].iso;
+            }
+            if (c.score) cell.dataset.score = c.score;
+            if (c.detail) cell.dataset.detail = c.detail;
+            if (c.date_display) cell.dataset.date = c.date_display;
+            cell.addEventListener("mouseenter", showPopup);
+            cell.addEventListener("mouseleave", hidePopup);
+            if (row.manual) cell.addEventListener("click", onManualClick);
+            grid.appendChild(cell);
+        });
+        grid.appendChild(el("div", "hm-streak", row.streak));
+    });
+
+    Streamlit.setFrameHeight(grid.scrollHeight + 30);
+}
+
+function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    e.className = cls;
+    e.textContent = text;
+    return e;
+}
+
+function onManualClick(e) {
+    const cell = e.currentTarget;
+    const habit = cell.dataset.habit;
+    const iso = cell.dataset.iso;
+    if (cell.classList.contains("hm-active")) {
+        cell.classList.remove("hm-active");
+        cell.classList.add("hm-empty");
+    } else {
+        cell.classList.remove("hm-empty");
+        cell.classList.add("hm-active");
+    }
+    Streamlit.setComponentValue(habit + "|" + iso + "|" + Date.now());
+}
+
+function showPopup(e) {
+    const cell = e.currentTarget;
+    const popup = document.getElementById("popup");
+    let html = "";
+    const dateStr = cell.dataset.date || "";
+    if (dateStr) html += '<div class="pop-title">' + dateStr + '</div>';
+    if (cell.classList.contains("hm-manual")) {
+        html += '<div class="pop-score">' + (cell.classList.contains("hm-active") ? "已完成" : "未完成") + '</div>';
+    } else if (cell.dataset.score) {
+        html += '<div class="pop-score">' + cell.dataset.score + '/10</div>';
+    }
+    const detail = cell.dataset.detail || "";
+    if (detail) {
+        const lines = detail.split("\\n").filter(l => l.trim());
+        html += '<div class="pop-detail">' + lines.map(l => '<div class="pop-detail-line">' + l + '</div>').join('') + '</div>';
+    }
+    if (!html) return;
+    popup.innerHTML = html;
+    popup.style.display = "block";
+    const rect = cell.getBoundingClientRect();
+    popup.style.left = (rect.left + rect.width/2 - popup.offsetWidth/2) + "px";
+    popup.style.top = (rect.bottom + 8) + "px";
+}
+
+function hidePopup() {
+    document.getElementById("popup").style.display = "none";
+}
+
+Streamlit.events.addEventListener(Streamlit.RENDER_EVENT, onRender);
+Streamlit.setComponentReady();
+</script>
+</body>
+</html>

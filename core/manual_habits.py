@@ -61,6 +61,10 @@ def _load() -> dict:
 
 def _save(data: dict) -> None:
     from googleapiclient.http import MediaInMemoryUpload
+    LOCAL_DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
+    LOCAL_DATA_FILE.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     try:
         service = _get_drive_service()
         file_id = _find_or_create_file(service)
@@ -68,10 +72,7 @@ def _save(data: dict) -> None:
         media = MediaInMemoryUpload(content, mimetype="application/json")
         service.files().update(fileId=file_id, media_body=media).execute()
     except Exception:
-        LOCAL_DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
-        LOCAL_DATA_FILE.write_text(
-            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        pass
 
 
 def get_checked_dates(habit: str) -> set[str]:
