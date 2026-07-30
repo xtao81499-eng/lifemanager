@@ -690,31 +690,17 @@ document.querySelectorAll('.hm-cell').forEach(cell => {{
 
 components.html(heatmap_html, height=grid_height + 60 + (20 if needs_scroll else 0), scrolling=False)
 
-# Manual habit toggle — compact pill button right below heatmap
+# Manual habit toggle — compact toggle right below heatmap
 from datetime import datetime as _dt
 _today_str = _dt.now().strftime("%Y-%m-%d")
 for habit_name in manual_habits:
     checked = get_checked_dates(habit_name)
     is_done = _today_str in checked
-    _btn_label = f"{'✓ ' if is_done else '○ '}{habit_name}"
-    _btn_style = (
-        "background: #34C759; color: #fff;" if is_done
-        else "background: #F5F5F7; color: #1D1D1F;"
-    )
-    st.markdown(
-        f"""<style>
-        div[data-testid="stButton"] > button[kind="secondary"]#btn_{habit_name} {{
-            {_btn_style}
-            border: none; border-radius: 20px; padding: 6px 18px;
-            font-size: 13px; font-weight: 500; margin-top: -12px;
-            cursor: pointer; transition: all 0.2s;
-        }}
-        </style>""",
-        unsafe_allow_html=True,
-    )
-    if st.button(_btn_label, key=f"toggle_{habit_name}", type="secondary"):
-        toggle_habit(habit_name, _today_str)
-        st.rerun()
+
+    def _on_toggle(habit=habit_name, today=_today_str):
+        toggle_habit(habit, today)
+
+    st.toggle(f"{habit_name} · 今日", value=is_done, key=f"toggle_{habit_name}", on_change=_on_toggle)
 
 
 # ─── Row 4: Reflection Insights ────────────────────────────
