@@ -677,7 +677,7 @@ document.querySelectorAll('.hm-cell').forEach(cell => {{
         popup.style.display = 'block';
         const rect = cell.getBoundingClientRect();
         popup.style.left = (rect.left + rect.width/2 - popup.offsetWidth/2) + 'px';
-        popup.style.top = (rect.bottom + 8) + 'px';
+        popup.style.top = (rect.top - popup.offsetHeight - 8) + 'px';
     }});
     cell.addEventListener('mouseleave', () => {{
         popup.style.display = 'none';
@@ -688,7 +688,7 @@ document.querySelectorAll('.hm-cell').forEach(cell => {{
 </html>
 """
 
-components.html(heatmap_html, height=grid_height + 80, scrolling=False)
+components.html(heatmap_html, height=grid_height + 20, scrolling=False)
 
 # Manual habit toggle — compact toggle right below heatmap
 st.markdown('<div style="margin-top: -1rem;"></div>', unsafe_allow_html=True)
