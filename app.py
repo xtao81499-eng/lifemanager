@@ -20,6 +20,12 @@ from core.data_processing import (
 from core.gdrive import get_reflection_insights
 from core.manual_habits import get_checked_dates, toggle as toggle_habit
 
+from pathlib import Path as _Path
+_heatmap_component = components.declare_component(
+    "habit_heatmap",
+    path=str(_Path(__file__).parent / "st_heatmap_frontend"),
+)
+
 # ─── Page Config ─────────────────────────────────────────────
 st.set_page_config(
     page_title="Life Manager",
@@ -569,11 +575,10 @@ for habit_name in manual_habits:
             active_count += 1
     rows.append({"label": habit_name, "cells": cells, "streak": f"{active_count}/{len(date_range)}", "manual": True})
 
-from components.heatmap import habit_heatmap
 grid_data = {"dates": dates_info, "rows": rows}
 num_rows = len(heatmap_cats) + len(manual_habits)
 hm_height = 80 + num_rows * 40 + 20
-toggle_result = habit_heatmap(grid_data, height=hm_height, key="habit_heatmap")
+toggle_result = _heatmap_component(grid_data=grid_data, height=hm_height, key="habit_heatmap", default=None)
 if toggle_result and toggle_result != st.session_state.get("_last_toggle"):
     st.session_state["_last_toggle"] = toggle_result
     parts = toggle_result.split("|", 2)
