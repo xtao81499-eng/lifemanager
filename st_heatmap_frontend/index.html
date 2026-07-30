@@ -2,75 +2,111 @@
 <html>
 <head>
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; background: transparent; }
-.hm-container { overflow-x: auto; padding: 8px 0; }
-.hm-grid { display: grid; gap: 6px; align-items: center; }
-.hm-header { font-size: 11px; color: #86868B; text-align: center; }
-.hm-subheader { font-size: 9px; color: #AEAEB2; text-align: center; }
-.hm-label { font-size: 13px; color: #1D1D1F; white-space: nowrap; padding-right: 8px; text-align: right; }
-.hm-streak { font-size: 11px; color: #86868B; text-align: center; padding-left: 4px; }
-.hm-cell { width: 22px; height: 22px; border-radius: 5px; }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; }
+body { background: transparent; }
+.hm-container {
+    background: #FFFFFF;
+    border-radius: 18px;
+    padding: 1.5rem 1.8rem;
+    box-shadow: 0 2px 20px rgba(60,60,67,0.06), 0 0 1px rgba(60,60,67,0.12);
+    overflow-x: auto;
+}
+.hm-grid {
+    display: inline-grid;
+    column-gap: 3px;
+    row-gap: 4px;
+    align-items: center;
+}
+.hm-date-label {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-weight: 600; color: #1D1D1F; line-height: 1.2;
+}
+.hm-date-label span { font-weight: 400; color: #86868B; }
+.hm-label { font-size: 0.78rem; font-weight: 500; color: #1D1D1F; text-align: right; padding-right: 0.8rem; white-space: nowrap; }
+.hm-cell {
+    border-radius: 5px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    cursor: default; position: relative; justify-self: center;
+}
+.hm-cell:hover { transform: scale(1.2); box-shadow: 0 4px 12px rgba(60,60,67,0.14); z-index: 10; }
 .hm-active { background: #34C759; }
 .hm-empty { background: #E5E5EA; }
-.hm-manual { cursor: pointer; transition: transform 0.1s; }
-.hm-manual:active { transform: scale(0.85); }
-.pop { position: fixed; background: #fff; border-radius: 12px; padding: 10px 14px; box-shadow: 0 4px 24px rgba(0,0,0,0.13); display: none; z-index: 9999; pointer-events: none; font-size: 12px; max-width: 220px; }
-.pop-title { font-weight: 600; color: #1D1D1F; margin-bottom: 2px; }
-.pop-score { color: #86868B; }
-.pop-detail { margin-top: 4px; color: #515154; }
-.pop-detail-line { margin-bottom: 2px; }
+.hm-today-manual { cursor: pointer; box-shadow: 0 0 0 2px #0A84FF; }
+.hm-today-manual:active { transform: scale(0.85); }
+.hm-streak { font-size: 0.65rem; color: #86868B; font-weight: 500; padding-left: 0.5rem; white-space: nowrap; }
+.hm-spacer { pointer-events: none; }
+#hm-popup {
+    display: none; position: fixed; background: #1D1D1F; color: #FFFFFF;
+    border-radius: 10px; padding: 0.6rem 0.9rem; font-size: 0.72rem;
+    z-index: 9999; pointer-events: none; min-width: 100px; max-width: 200px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+}
+#hm-popup .pop-date { font-weight: 600; margin-bottom: 0.2rem; }
+#hm-popup .pop-score { color: #34C759; font-weight: 600; margin-bottom: 0.3rem; }
+#hm-popup .pop-detail { border-top: 1px solid rgba(255,255,255,0.15); padding-top: 0.35rem; margin-top: 0.2rem; }
+#hm-popup .pop-detail-line { color: #E5E5EA; line-height: 1.5; font-size: 0.68rem; }
+#hm-popup .pop-empty { color: #86868B; font-style: italic; }
 </style>
 </head>
 <body>
-<div class="hm-container"><div class="hm-grid" id="grid"></div></div>
-<div class="pop" id="popup"></div>
+<div class="hm-container">
+    <div class="hm-grid" id="grid"></div>
+</div>
+<div id="hm-popup"></div>
 <script src="streamlit-component-lib.js"></script>
 <script>
+let clickTimer = null;
+
 function onRender(event) {
     const data = event.detail.args.grid_data;
+    const todayIso = event.detail.args.today_iso;
     const cols = data.dates.length;
+    const cellSize = Math.max(16, Math.min(28, Math.floor(700 / cols)));
     const grid = document.getElementById("grid");
     grid.innerHTML = "";
-    grid.style.gridTemplateColumns = "90px " + "28px ".repeat(cols) + " 50px";
+    grid.style.gridTemplateColumns = "5.5rem repeat(" + cols + ", " + cellSize + "px) auto";
 
-    // Header row: day numbers
-    grid.appendChild(el("div", "hm-header", ""));
+    // Header row
+    grid.appendChild(el("div", "hm-spacer", ""));
     data.dates.forEach(d => {
-        const h = el("div", "hm-header", d.day);
+        const h = el("div", "hm-date-label", "");
+        h.innerHTML = d.day + '<span>' + d.weekday + '</span>';
+        h.style.fontSize = Math.max(9, Math.min(12, Math.floor(cellSize / 2))) + "px";
         grid.appendChild(h);
     });
-    grid.appendChild(el("div", "hm-header", ""));
+    grid.appendChild(el("div", "hm-spacer", ""));
 
-    // Subheader row: weekday
-    grid.appendChild(el("div", "hm-subheader", ""));
-    data.dates.forEach(d => {
-        grid.appendChild(el("div", "hm-subheader", d.weekday));
-    });
-    grid.appendChild(el("div", "hm-subheader", ""));
-
-    // Category rows
+    // Data rows
     data.rows.forEach(row => {
         grid.appendChild(el("div", "hm-label", row.label));
         row.cells.forEach((c, i) => {
             const cell = document.createElement("div");
-            cell.className = "hm-cell " + (c.active ? "hm-active" : "hm-empty") + (row.manual ? " hm-manual" : "");
+            const iso = data.dates[i].iso;
+            const isToday = iso === todayIso;
+            let cls = "hm-cell " + (c.active ? "hm-active" : "hm-empty");
+            if (row.manual && isToday) cls += " hm-today-manual";
+            cell.className = cls;
+            cell.style.width = cellSize + "px";
+            cell.style.height = cellSize + "px";
             if (row.manual) {
                 cell.dataset.habit = row.label;
-                cell.dataset.iso = data.dates[i].iso;
+                cell.dataset.iso = iso;
             }
             if (c.score) cell.dataset.score = c.score;
             if (c.detail) cell.dataset.detail = c.detail;
-            if (c.date_display) cell.dataset.date = c.date_display;
+            cell.dataset.date = c.date_display || "";
             cell.addEventListener("mouseenter", showPopup);
             cell.addEventListener("mouseleave", hidePopup);
-            if (row.manual) cell.addEventListener("click", onManualClick);
+            if (row.manual && isToday) {
+                cell.addEventListener("click", function() { onTodayClick(cell); });
+            }
             grid.appendChild(cell);
         });
         grid.appendChild(el("div", "hm-streak", row.streak));
     });
 
-    Streamlit.setFrameHeight(grid.scrollHeight + 30);
+    Streamlit.setFrameHeight(grid.scrollHeight + 20);
 }
 
 function el(tag, cls, text) {
@@ -80,46 +116,62 @@ function el(tag, cls, text) {
     return e;
 }
 
-function onManualClick(e) {
-    const cell = e.currentTarget;
+function onTodayClick(cell) {
     const habit = cell.dataset.habit;
     const iso = cell.dataset.iso;
-    if (cell.classList.contains("hm-active")) {
-        cell.classList.remove("hm-active");
-        cell.classList.add("hm-empty");
-    } else {
+    const isActive = cell.classList.contains("hm-active");
+
+    if (!isActive) {
+        // Single click: gray -> green (check in)
         cell.classList.remove("hm-empty");
         cell.classList.add("hm-active");
+        Streamlit.setComponentValue(habit + "|" + iso + "|check|" + Date.now());
+    } else {
+        // Active cell: need double-click to uncheck
+        if (clickTimer) {
+            // Second click within 400ms -> uncheck
+            clearTimeout(clickTimer);
+            clickTimer = null;
+            cell.classList.remove("hm-active");
+            cell.classList.add("hm-empty");
+            Streamlit.setComponentValue(habit + "|" + iso + "|uncheck|" + Date.now());
+        } else {
+            // First click on active cell: wait for second
+            clickTimer = setTimeout(function() {
+                clickTimer = null;
+            }, 400);
+        }
     }
-    Streamlit.setComponentValue(habit + "|" + iso + "|" + Date.now());
 }
 
 function showPopup(e) {
     const cell = e.currentTarget;
-    const popup = document.getElementById("popup");
-    let html = "";
+    const popup = document.getElementById("hm-popup");
     const dateStr = cell.dataset.date || "";
-    if (dateStr) html += '<div class="pop-title">' + dateStr + '</div>';
-    if (cell.classList.contains("hm-manual")) {
-        html += '<div class="pop-score">' + (cell.classList.contains("hm-active") ? "已完成" : "未完成") + '</div>';
-    } else if (cell.dataset.score) {
-        html += '<div class="pop-score">' + cell.dataset.score + '/10</div>';
+    if (!dateStr) return;
+    let html = '<div class="pop-date">' + dateStr + '</div>';
+    const score = cell.dataset.score || "";
+    if (score) {
+        html += '<div class="pop-score">' + score + '/10</div>';
+    } else if (cell.classList.contains("hm-active")) {
+        html += '<div class="pop-score">已完成</div>';
+    } else {
+        html += '<div class="pop-empty">未记录</div>';
     }
     const detail = cell.dataset.detail || "";
     if (detail) {
-        const lines = detail.split("\\n").filter(l => l.trim());
+        const lines = detail.split("\n").filter(l => l.trim());
         html += '<div class="pop-detail">' + lines.map(l => '<div class="pop-detail-line">' + l + '</div>').join('') + '</div>';
     }
-    if (!html) return;
     popup.innerHTML = html;
     popup.style.display = "block";
     const rect = cell.getBoundingClientRect();
     popup.style.left = (rect.left + rect.width/2 - popup.offsetWidth/2) + "px";
-    popup.style.top = (rect.bottom + 8) + "px";
+    popup.style.top = (rect.top - popup.offsetHeight - 8) + "px";
 }
 
 function hidePopup() {
-    document.getElementById("popup").style.display = "none";
+    document.getElementById("hm-popup").style.display = "none";
 }
 
 Streamlit.events.addEventListener(Streamlit.RENDER_EVENT, onRender);

@@ -20,6 +20,12 @@ from core.data_processing import (
 from core.gdrive import get_reflection_insights
 from core.manual_habits import get_checked_dates, toggle as toggle_habit
 
+from pathlib import Path as _Path
+_heatmap_component = components.declare_component(
+    "habit_heatmap",
+    path=str(_Path(__file__).parent / "st_heatmap_frontend"),
+)
+
 # ─── Page Config ─────────────────────────────────────────────
 st.set_page_config(
     page_title="Life Manager",
@@ -569,139 +575,28 @@ for habit_name in manual_habits:
             active_count += 1
     rows.append({"label": habit_name, "cells": cells, "streak": f"{active_count}/{len(date_range)}", "manual": True})
 
-# Render heatmap as static HTML
-import json as _json
-num_days = len(date_range)
-cell_size = max(16, min(28, 700 // num_days))
-grid_width = 88 + num_days * (cell_size + 3) + 60
-grid_height = 60 + (len(heatmap_cats) + len(manual_habits)) * (cell_size + 10) + 40
-needs_scroll = grid_width > 900
-
-date_header_html = ""
-for d in date_range:
-    wd = d.weekday()
-    date_header_html += f'<div class="hm-date-label">{d.strftime("%d")}<br><span>{weekday_labels[wd]}</span></div>'
-
-grid_rows_html = ""
-for row in rows:
-    grid_rows_html += f'<div class="hm-label">{row["label"]}</div>'
-    for i, c in enumerate(row["cells"]):
-        cls = "hm-cell hm-active" if c["active"] else "hm-cell hm-empty"
-        attrs = f'data-date="{c["date_display"]}"'
-        if c["score"]:
-            attrs += f' data-score="{c["score"]}"'
-        if c["detail"]:
-            import html as _html_mod
-            attrs += f' data-detail="{_html_mod.escape(c["detail"])}"'
-        grid_rows_html += f'<div class="{cls}" {attrs}></div>'
-    grid_rows_html += f'<div class="hm-streak">{row["streak"]}</div>'
-
-heatmap_html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
-    * {{ margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; }}
-    body {{ background: transparent; overflow: visible; }}
-    .hm-container {{
-        background: #FFFFFF;
-        border-radius: 18px;
-        padding: 1.5rem 1.8rem;
-        box-shadow: 0 2px 20px rgba(60,60,67,0.06), 0 0 1px rgba(60,60,67,0.12);
-        overflow-x: {"auto" if needs_scroll else "hidden"};
-    }}
-    .hm-grid {{
-        display: inline-grid;
-        grid-template-columns: 5.5rem repeat({num_days}, {cell_size}px) auto;
-        column-gap: 3px;
-        row-gap: 4px;
-        align-items: center;
-        min-width: {"{}px".format(grid_width) if needs_scroll else "100%"};
-    }}
-    .hm-date-label {{
-        display: flex; flex-direction: column; align-items: center; justify-content: center;
-        font-size: {max(9, min(12, cell_size // 2))}px; font-weight: 600; color: #1D1D1F; line-height: 1.2;
-    }}
-    .hm-date-label span {{ font-size: {max(7, min(10, cell_size // 3))}px; font-weight: 400; color: #86868B; }}
-    .hm-label {{ font-size: 0.78rem; font-weight: 500; color: #1D1D1F; text-align: right; padding-right: 0.8rem; white-space: nowrap; }}
-    .hm-cell {{
-        width: {cell_size}px; height: {cell_size}px; border-radius: {max(3, cell_size // 7)}px;
-        transition: transform 0.15s ease, box-shadow 0.15s ease; cursor: default; position: relative; justify-self: center;
-    }}
-    .hm-cell:hover {{ transform: scale(1.2); box-shadow: 0 4px 12px rgba(60,60,67,0.14); z-index: 10; }}
-    .hm-active {{ background: #34C759; }}
-    .hm-empty {{ background: #E5E5EA; }}
-    .hm-streak {{ font-size: 0.65rem; color: #86868B; font-weight: 500; padding-left: 0.5rem; white-space: nowrap; }}
-    .hm-spacer {{ pointer-events: none; }}
-    #hm-popup {{
-        display: none; position: fixed; background: #1D1D1F; color: #FFFFFF;
-        border-radius: 10px; padding: 0.6rem 0.9rem; font-size: 0.72rem;
-        z-index: 9999; pointer-events: none; min-width: 100px; max-width: 200px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.25);
-    }}
-    #hm-popup .pop-date {{ font-weight: 600; margin-bottom: 0.2rem; }}
-    #hm-popup .pop-score {{ color: #34C759; font-weight: 600; margin-bottom: 0.3rem; }}
-    #hm-popup .pop-detail {{ border-top: 1px solid rgba(255,255,255,0.15); padding-top: 0.35rem; margin-top: 0.2rem; }}
-    #hm-popup .pop-detail-line {{ color: #E5E5EA; line-height: 1.5; font-size: 0.68rem; }}
-    #hm-popup .pop-empty {{ color: #86868B; font-style: italic; }}
-</style>
-</head>
-<body>
-<div class="hm-container">
-    <div class="hm-grid">
-        <div class="hm-spacer"></div>
-        {date_header_html}
-        <div class="hm-spacer"></div>
-        {grid_rows_html}
-    </div>
-</div>
-<div id="hm-popup"></div>
-<script>
-const popup = document.getElementById('hm-popup');
-document.querySelectorAll('.hm-cell').forEach(cell => {{
-    cell.addEventListener('mouseenter', e => {{
-        const date = cell.dataset.date || '';
-        const score = cell.dataset.score || '';
-        const detail = cell.dataset.detail || '';
-        if (!date) return;
-        let html = '<div class="pop-date">' + date + '</div>';
-        if (score) html += '<div class="pop-score">' + score + '/10</div>';
-        else if (cell.classList.contains('hm-active')) html += '<div class="pop-score">已完成</div>';
-        else html += '<div class="pop-empty">未记录</div>';
-        if (detail) {{
-            const lines = detail.split('\\n').filter(l => l.trim());
-            html += '<div class="pop-detail">' + lines.map(l => '<div class="pop-detail-line">' + l + '</div>').join('') + '</div>';
-        }}
-        popup.innerHTML = html;
-        popup.style.display = 'block';
-        const rect = cell.getBoundingClientRect();
-        popup.style.left = (rect.left + rect.width/2 - popup.offsetWidth/2) + 'px';
-        popup.style.top = (rect.top - popup.offsetHeight - 8) + 'px';
-    }});
-    cell.addEventListener('mouseleave', () => {{
-        popup.style.display = 'none';
-    }});
-}});
-</script>
-</body>
-</html>
-"""
-
-components.html(heatmap_html, height=grid_height + 20, scrolling=False)
-
-# Manual habit toggle — compact toggle right below heatmap
-st.markdown('<div style="margin-top: -1rem;"></div>', unsafe_allow_html=True)
+# Render heatmap via custom component (supports click-to-toggle)
 from datetime import datetime as _dt
 _today_str = _dt.now().strftime("%Y-%m-%d")
-for habit_name in manual_habits:
-    checked = get_checked_dates(habit_name)
-    is_done = _today_str in checked
+grid_data = {"dates": dates_info, "rows": rows}
+num_rows = len(heatmap_cats) + len(manual_habits)
+hm_height = 60 + num_rows * 38 + 50
 
-    def _on_toggle(habit=habit_name, today=_today_str):
-        toggle_habit(habit, today)
-
-    st.toggle(f"{habit_name} · 今日", value=is_done, key=f"toggle_{habit_name}", on_change=_on_toggle)
+toggle_result = _heatmap_component(grid_data=grid_data, today_iso=_today_str, height=hm_height, key="habit_heatmap", default=None)
+if toggle_result and toggle_result != st.session_state.get("_last_toggle"):
+    st.session_state["_last_toggle"] = toggle_result
+    parts = toggle_result.split("|")
+    if len(parts) >= 3:
+        habit, date_str, action = parts[0], parts[1], parts[2]
+        if action == "check":
+            checked = get_checked_dates(habit)
+            if date_str not in checked:
+                toggle_habit(habit, date_str)
+        elif action == "uncheck":
+            checked = get_checked_dates(habit)
+            if date_str in checked:
+                toggle_habit(habit, date_str)
+        st.rerun()
 
 
 # ─── Row 4: Reflection Insights ────────────────────────────
