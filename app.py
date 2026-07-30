@@ -574,7 +574,7 @@ import json as _json
 num_days = len(date_range)
 cell_size = max(16, min(28, 700 // num_days))
 grid_width = 88 + num_days * (cell_size + 3) + 60
-grid_height = 50 + (len(heatmap_cats) + len(manual_habits)) * (cell_size + 8) + 10
+grid_height = 60 + (len(heatmap_cats) + len(manual_habits)) * (cell_size + 10) + 40
 needs_scroll = grid_width > 900
 
 date_header_html = ""
@@ -603,7 +603,7 @@ heatmap_html = f"""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
     * {{ margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; }}
-    body {{ background: transparent; overflow: hidden; }}
+    body {{ background: transparent; overflow: visible; }}
     .hm-container {{
         background: #FFFFFF;
         border-radius: 18px;
@@ -688,7 +688,7 @@ document.querySelectorAll('.hm-cell').forEach(cell => {{
 </html>
 """
 
-components.html(heatmap_html, height=grid_height, scrolling=False)
+components.html(heatmap_html, height=grid_height + 80, scrolling=False)
 
 # Manual habit toggle — compact toggle right below heatmap
 st.markdown('<div style="margin-top: -1rem;"></div>', unsafe_allow_html=True)
