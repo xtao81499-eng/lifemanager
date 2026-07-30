@@ -54,7 +54,37 @@ body { background: transparent; }
     <div class="hm-grid" id="grid"></div>
 </div>
 <div id="hm-popup"></div>
-<script src="streamlit-component-lib.js"></script>
+<script>
+// Minimal Streamlit Component Lib (inline, no external file needed)
+var Streamlit = (function() {
+    var lastArgs = null;
+    var renderCallbacks = [];
+
+    function sendMessage(type, data) {
+        window.parent.postMessage(Object.assign({type: type, isStreamlitMessage: true}, data), "*");
+    }
+
+    window.addEventListener("message", function(e) {
+        if (!e.data || !e.data.type) return;
+        if (e.data.type === "streamlit:render") {
+            lastArgs = e.data.args;
+            renderCallbacks.forEach(function(cb) {
+                cb({detail: {args: e.data.args}});
+            });
+        }
+    });
+
+    return {
+        setComponentReady: function() { sendMessage("streamlit:componentReady", {apiVersion: 1}); },
+        setComponentValue: function(value) { sendMessage("streamlit:setComponentValue", {value: value}); },
+        setFrameHeight: function(h) { sendMessage("streamlit:setFrameHeight", {height: h || document.body.scrollHeight}); },
+        RENDER_EVENT: "render",
+        events: {
+            addEventListener: function(type, cb) { renderCallbacks.push(cb); if (lastArgs) cb({detail: {args: lastArgs}}); }
+        }
+    };
+})();
+</script>
 <script>
 let clickTimer = null;
 
@@ -69,7 +99,7 @@ function onRender(event) {
 
     // Header row
     grid.appendChild(el("div", "hm-spacer", ""));
-    data.dates.forEach(d => {
+    data.dates.forEach(function(d) {
         const h = el("div", "hm-date-label", "");
         h.innerHTML = d.day + '<span>' + d.weekday + '</span>';
         h.style.fontSize = Math.max(9, Math.min(12, Math.floor(cellSize / 2))) + "px";
@@ -78,9 +108,9 @@ function onRender(event) {
     grid.appendChild(el("div", "hm-spacer", ""));
 
     // Data rows
-    data.rows.forEach(row => {
+    data.rows.forEach(function(row) {
         grid.appendChild(el("div", "hm-label", row.label));
-        row.cells.forEach((c, i) => {
+        row.cells.forEach(function(c, i) {
             const cell = document.createElement("div");
             const iso = data.dates[i].iso;
             const isToday = iso === todayIso;
@@ -122,24 +152,18 @@ function onTodayClick(cell) {
     const isActive = cell.classList.contains("hm-active");
 
     if (!isActive) {
-        // Single click: gray -> green (check in)
         cell.classList.remove("hm-empty");
         cell.classList.add("hm-active");
         Streamlit.setComponentValue(habit + "|" + iso + "|check|" + Date.now());
     } else {
-        // Active cell: need double-click to uncheck
         if (clickTimer) {
-            // Second click within 400ms -> uncheck
             clearTimeout(clickTimer);
             clickTimer = null;
             cell.classList.remove("hm-active");
             cell.classList.add("hm-empty");
             Streamlit.setComponentValue(habit + "|" + iso + "|uncheck|" + Date.now());
         } else {
-            // First click on active cell: wait for second
-            clickTimer = setTimeout(function() {
-                clickTimer = null;
-            }, 400);
+            clickTimer = setTimeout(function() { clickTimer = null; }, 400);
         }
     }
 }
@@ -160,8 +184,8 @@ function showPopup(e) {
     }
     const detail = cell.dataset.detail || "";
     if (detail) {
-        const lines = detail.split("\n").filter(l => l.trim());
-        html += '<div class="pop-detail">' + lines.map(l => '<div class="pop-detail-line">' + l + '</div>').join('') + '</div>';
+        const lines = detail.split("\n").filter(function(l) { return l.trim(); });
+        html += '<div class="pop-detail">' + lines.map(function(l) { return '<div class="pop-detail-line">' + l + '</div>'; }).join('') + '</div>';
     }
     popup.innerHTML = html;
     popup.style.display = "block";
