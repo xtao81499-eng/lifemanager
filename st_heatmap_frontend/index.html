@@ -4,7 +4,7 @@
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; }
-body { background: transparent; }
+body { background: transparent; overflow: visible; }
 .hm-container {
     background: #FFFFFF;
     border-radius: 18px;
@@ -136,7 +136,7 @@ function onRender(event) {
         grid.appendChild(el("div", "hm-streak", row.streak));
     });
 
-    Streamlit.setFrameHeight(grid.scrollHeight + 20);
+    Streamlit.setFrameHeight(document.querySelector('.hm-container').offsetHeight + 10);
 }
 
 function el(tag, cls, text) {

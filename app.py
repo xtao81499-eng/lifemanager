@@ -580,7 +580,7 @@ from datetime import datetime as _dt
 _today_str = _dt.now().strftime("%Y-%m-%d")
 grid_data = {"dates": dates_info, "rows": rows}
 num_rows = len(heatmap_cats) + len(manual_habits)
-hm_height = 60 + num_rows * 38 + 50
+hm_height = 80 + num_rows * 42 + 60
 
 toggle_result = _heatmap_component(grid_data=grid_data, today_iso=_today_str, height=hm_height, key="habit_heatmap", default=None)
 if toggle_result and toggle_result != st.session_state.get("_last_toggle"):
