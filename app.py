@@ -523,226 +523,228 @@ if date_span > 1:
         )
         st.plotly_chart(fig_trend, use_container_width=True, config={"displayModeBar": False})
 
-# ─── Row 3: Habit Heatmap (iOS-style grid) ──────────────────
-st.markdown('<div class="section-title">习惯追踪</div>', unsafe_allow_html=True)
+# ─── Row 3: Habit Heatmap + Reflection Insights (side by side) ──
+_row3_left, _row3_right = st.columns([1.2, 1], gap="medium")
 
-manual_habits = ["睡前护肤"]
+with _row3_left:
+    st.markdown('<div class="section-title">习惯追踪</div>', unsafe_allow_html=True)
 
-heatmap_cats = ["运动", "学习", "深度复盘/灵感"]
-heatmap_data = df[df["category"].isin(heatmap_cats)].copy()
-date_range = pd.date_range(start=start_date, end=max(end_date, today), freq="D")
-weekday_labels = ["一", "二", "三", "四", "五", "六", "日"]
+    manual_habits = ["睡前护肤"]
 
-# Build grid data as dict for custom component
-import html as _html
-dates_info = []
-for d in date_range:
-    dates_info.append({
-        "day": d.strftime("%d"),
-        "weekday": weekday_labels[d.weekday()],
-        "iso": d.strftime("%Y-%m-%d"),
-    })
+    heatmap_cats = ["运动", "学习", "深度复盘/灵感"]
+    heatmap_data = df[df["category"].isin(heatmap_cats)].copy()
+    date_range = pd.date_range(start=start_date, end=max(end_date, today), freq="D")
+    weekday_labels = ["一", "二", "三", "四", "五", "六", "日"]
 
-rows = []
-for cat_name in heatmap_cats:
-    cat_events = heatmap_data[heatmap_data["category"] == cat_name]
-    daily_scores = cat_events.groupby("date")["score"].mean()
-    daily_details = cat_events.groupby("date")["detail"].apply(
-        lambda x: "\n".join(s.strip() for s in x if str(s).strip())
-    ) if "detail" in cat_events.columns else pd.Series(dtype=str)
-    cells = []
-    active_count = 0
+    # Build grid data as dict for custom component
+    import html as _html
+    dates_info = []
     for d in date_range:
-        if d in daily_scores.index:
-            raw_score = daily_scores[d]
-            score_val = f"{raw_score:.1f}" if pd.notna(raw_score) and raw_score == raw_score else ""
-            detail_text = str(daily_details.get(d, "")).strip() if d in daily_details.index else ""
-            cells.append({"active": True, "score": score_val, "detail": detail_text, "date_display": d.strftime("%m月%d日")})
-            active_count += 1
-        else:
-            cells.append({"active": False, "score": "", "detail": "", "date_display": d.strftime("%m月%d日")})
-    rows.append({"label": cat_name, "cells": cells, "streak": f"{active_count}/{len(date_range)}", "manual": False})
+        dates_info.append({
+            "day": d.strftime("%d"),
+            "weekday": weekday_labels[d.weekday()],
+            "iso": d.strftime("%Y-%m-%d"),
+        })
 
-for habit_name in manual_habits:
-    checked_dates = get_checked_dates(habit_name)
-    cells = []
-    active_count = 0
-    for d in date_range:
-        date_iso = d.strftime("%Y-%m-%d")
-        is_checked = date_iso in checked_dates
-        cells.append({"active": is_checked, "score": "", "detail": "", "date_display": d.strftime("%m月%d日")})
-        if is_checked:
-            active_count += 1
-    rows.append({"label": habit_name, "cells": cells, "streak": f"{active_count}/{len(date_range)}", "manual": True})
+    rows = []
+    for cat_name in heatmap_cats:
+        cat_events = heatmap_data[heatmap_data["category"] == cat_name]
+        daily_scores = cat_events.groupby("date")["score"].mean()
+        daily_details = cat_events.groupby("date")["detail"].apply(
+            lambda x: "\n".join(s.strip() for s in x if str(s).strip())
+        ) if "detail" in cat_events.columns else pd.Series(dtype=str)
+        cells = []
+        active_count = 0
+        for d in date_range:
+            if d in daily_scores.index:
+                raw_score = daily_scores[d]
+                score_val = f"{raw_score:.1f}" if pd.notna(raw_score) and raw_score == raw_score else ""
+                detail_text = str(daily_details.get(d, "")).strip() if d in daily_details.index else ""
+                cells.append({"active": True, "score": score_val, "detail": detail_text, "date_display": d.strftime("%m月%d日")})
+                active_count += 1
+            else:
+                cells.append({"active": False, "score": "", "detail": "", "date_display": d.strftime("%m月%d日")})
+        rows.append({"label": cat_name, "cells": cells, "streak": f"{active_count}/{len(date_range)}", "manual": False})
 
-# Render heatmap via custom component (supports click-to-toggle)
-from datetime import datetime as _dt
-_today_str = _dt.now().strftime("%Y-%m-%d")
-grid_data = {"dates": dates_info, "rows": rows}
-num_rows = len(heatmap_cats) + len(manual_habits)
-hm_height = 80 + num_rows * 42 + 60
+    for habit_name in manual_habits:
+        checked_dates = get_checked_dates(habit_name)
+        cells = []
+        active_count = 0
+        for d in date_range:
+            date_iso = d.strftime("%Y-%m-%d")
+            is_checked = date_iso in checked_dates
+            cells.append({"active": is_checked, "score": "", "detail": "", "date_display": d.strftime("%m月%d日")})
+            if is_checked:
+                active_count += 1
+        rows.append({"label": habit_name, "cells": cells, "streak": f"{active_count}/{len(date_range)}", "manual": True})
 
-toggle_result = _heatmap_component(grid_data=grid_data, today_iso=_today_str, height=hm_height, key="habit_heatmap", default=None)
-if toggle_result and toggle_result != st.session_state.get("_last_toggle"):
-    st.session_state["_last_toggle"] = toggle_result
-    parts = toggle_result.split("|")
-    if len(parts) >= 3:
-        habit, date_str, action = parts[0], parts[1], parts[2]
-        if action == "check":
-            checked = get_checked_dates(habit)
-            if date_str not in checked:
-                toggle_habit(habit, date_str)
-        elif action == "uncheck":
-            checked = get_checked_dates(habit)
-            if date_str in checked:
-                toggle_habit(habit, date_str)
-        st.rerun()
+    # Render heatmap via custom component (supports click-to-toggle)
+    from datetime import datetime as _dt
+    _today_str = _dt.now().strftime("%Y-%m-%d")
+    grid_data = {"dates": dates_info, "rows": rows}
+    num_rows = len(heatmap_cats) + len(manual_habits)
+    hm_height = 80 + num_rows * 42 + 60
 
+    toggle_result = _heatmap_component(grid_data=grid_data, today_iso=_today_str, height=hm_height, key="habit_heatmap", default=None)
+    if toggle_result and toggle_result != st.session_state.get("_last_toggle"):
+        st.session_state["_last_toggle"] = toggle_result
+        parts = toggle_result.split("|")
+        if len(parts) >= 3:
+            habit, date_str, action = parts[0], parts[1], parts[2]
+            if action == "check":
+                checked = get_checked_dates(habit)
+                if date_str not in checked:
+                    toggle_habit(habit, date_str)
+            elif action == "uncheck":
+                checked = get_checked_dates(habit)
+                if date_str in checked:
+                    toggle_habit(habit, date_str)
+            st.rerun()
 
-# ─── Row 4: Reflection Insights ────────────────────────────
-st.markdown('<div class="section-title">反思洞察</div>', unsafe_allow_html=True)
+with _row3_right:
+    st.markdown('<div class="section-title">反思洞察</div>', unsafe_allow_html=True)
 
-@st.cache_data(ttl=600)
-def _load_insights():
-    try:
-        return get_reflection_insights()
-    except Exception:
-        return {"title": "", "date": "", "suggestions": [], "is_today": False}
+    @st.cache_data(ttl=600)
+    def _load_insights():
+        try:
+            return get_reflection_insights()
+        except Exception:
+            return {"title": "", "date": "", "suggestions": [], "is_today": False}
 
-insights = _load_insights()
+    insights = _load_insights()
 
-if insights["suggestions"]:
-    items_html = ""
-    for i, s in enumerate(insights["suggestions"]):
-        items_html += f"""
-        <div class="ri-item" style="animation-delay: {i * 0.06}s">
-            <div class="ri-bullet"></div>
-            <span>{s}</span>
-        </div>"""
+    if insights["suggestions"]:
+        items_html = ""
+        for i, s in enumerate(insights["suggestions"]):
+            items_html += f"""
+            <div class="ri-item" style="animation-delay: {i * 0.06}s">
+                <div class="ri-bullet"></div>
+                <span>{s}</span>
+            </div>"""
 
-    date_label = "今日" if insights["is_today"] else insights["date"]
+        date_label = "今日" if insights["is_today"] else insights["date"]
 
-    reflection_html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
-        * {{ margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; }}
-        body {{ background: transparent; }}
-        .ri-card {{
-            background: #FFFFFF;
-            border-radius: 18px;
-            padding: 1.8rem 2rem;
-            box-shadow: 0 1px 12px rgba(60,60,67,0.05), 0 0 1px rgba(60,60,67,0.10);
-        }}
-        .ri-header {{
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 1.2rem;
-        }}
-        .ri-title {{
-            font-size: 0.95rem;
-            font-weight: 600;
-            color: #0A84FF;
-        }}
-        .ri-date {{
-            font-size: 0.7rem;
-            font-weight: 500;
-            color: #86868B;
-            background: #F5F5F7;
-            padding: 0.25rem 0.7rem;
-            border-radius: 999px;
-        }}
-        .ri-source {{
-            font-size: 0.7rem;
-            color: #AEAEB2;
-            margin-bottom: 1rem;
-            font-weight: 400;
-        }}
-        .ri-item {{
-            display: flex;
-            align-items: flex-start;
-            gap: 0.75rem;
-            padding: 0.65rem 0;
-            border-bottom: 1px solid rgba(0,0,0,0.03);
-            opacity: 0;
-            animation: fadeIn 0.35s ease forwards;
-        }}
-        .ri-item:last-child {{ border-bottom: none; }}
-        .ri-bullet {{
-            width: 7px;
-            height: 7px;
-            min-width: 7px;
-            border-radius: 50%;
-            background: #0A84FF;
-            margin-top: 0.45rem;
-        }}
-        .ri-item span {{
-            font-size: 0.82rem;
-            font-weight: 400;
-            color: #1D1D1F;
-            line-height: 1.55;
-        }}
-        @keyframes fadeIn {{
-            from {{ opacity: 0; transform: translateY(4px); }}
-            to {{ opacity: 1; transform: translateY(0); }}
-        }}
-    </style>
-    </head>
-    <body>
-    <div class="ri-card">
-        <div class="ri-header">
-            <div class="ri-title">Reflection Insights</div>
-            <div class="ri-date">{date_label}</div>
+        reflection_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+            * {{ margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; }}
+            body {{ background: transparent; }}
+            .ri-card {{
+                background: #FFFFFF;
+                border-radius: 18px;
+                padding: 1.8rem 2rem;
+                box-shadow: 0 1px 12px rgba(60,60,67,0.05), 0 0 1px rgba(60,60,67,0.10);
+            }}
+            .ri-header {{
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 1.2rem;
+            }}
+            .ri-title {{
+                font-size: 0.95rem;
+                font-weight: 600;
+                color: #0A84FF;
+            }}
+            .ri-date {{
+                font-size: 0.7rem;
+                font-weight: 500;
+                color: #86868B;
+                background: #F5F5F7;
+                padding: 0.25rem 0.7rem;
+                border-radius: 999px;
+            }}
+            .ri-source {{
+                font-size: 0.7rem;
+                color: #AEAEB2;
+                margin-bottom: 1rem;
+                font-weight: 400;
+            }}
+            .ri-item {{
+                display: flex;
+                align-items: flex-start;
+                gap: 0.75rem;
+                padding: 0.65rem 0;
+                border-bottom: 1px solid rgba(0,0,0,0.03);
+                opacity: 0;
+                animation: fadeIn 0.35s ease forwards;
+            }}
+            .ri-item:last-child {{ border-bottom: none; }}
+            .ri-bullet {{
+                width: 7px;
+                height: 7px;
+                min-width: 7px;
+                border-radius: 50%;
+                background: #0A84FF;
+                margin-top: 0.45rem;
+            }}
+            .ri-item span {{
+                font-size: 0.82rem;
+                font-weight: 400;
+                color: #1D1D1F;
+                line-height: 1.55;
+            }}
+            @keyframes fadeIn {{
+                from {{ opacity: 0; transform: translateY(4px); }}
+                to {{ opacity: 1; transform: translateY(0); }}
+            }}
+        </style>
+        </head>
+        <body>
+        <div class="ri-card">
+            <div class="ri-header">
+                <div class="ri-title">Reflection Insights</div>
+                <div class="ri-date">{date_label}</div>
+            </div>
+            <div class="ri-source">来源：{insights['title']}</div>
+            {items_html}
         </div>
-        <div class="ri-source">来源：{insights['title']}</div>
-        {items_html}
-    </div>
-    </body>
-    </html>
-    """
-    ri_height = 120 + len(insights["suggestions"]) * 42
-    components.html(reflection_html, height=ri_height, scrolling=False)
+        </body>
+        </html>
+        """
+        ri_height = 120 + len(insights["suggestions"]) * 42
+        components.html(reflection_html, height=ri_height, scrolling=False)
 
-else:
-    empty_html = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; }
-        body { background: transparent; }
-        .ri-card {
-            background: #FFFFFF;
-            border-radius: 18px;
-            padding: 2.5rem 2rem;
-            box-shadow: 0 1px 12px rgba(60,60,67,0.05), 0 0 1px rgba(60,60,67,0.10);
-            text-align: center;
-        }
-        .ri-empty-icon {
-            font-size: 2rem;
-            margin-bottom: 0.6rem;
-            opacity: 0.4;
-        }
-        .ri-empty-text {
-            font-size: 0.85rem;
-            color: #AEAEB2;
-            font-weight: 400;
-        }
-    </style>
-    </head>
-    <body>
-    <div class="ri-card">
-        <div class="ri-empty-icon">◇</div>
-        <div class="ri-empty-text">等待今日系统补丁记录...</div>
-    </div>
-    </body>
-    </html>
-    """
-    components.html(empty_html, height=140, scrolling=False)
+    else:
+        empty_html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+            * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; }
+            body { background: transparent; }
+            .ri-card {
+                background: #FFFFFF;
+                border-radius: 18px;
+                padding: 2.5rem 2rem;
+                box-shadow: 0 1px 12px rgba(60,60,67,0.05), 0 0 1px rgba(60,60,67,0.10);
+                text-align: center;
+            }
+            .ri-empty-icon {
+                font-size: 2rem;
+                margin-bottom: 0.6rem;
+                opacity: 0.4;
+            }
+            .ri-empty-text {
+                font-size: 0.85rem;
+                color: #AEAEB2;
+                font-weight: 400;
+            }
+        </style>
+        </head>
+        <body>
+        <div class="ri-card">
+            <div class="ri-empty-icon">◇</div>
+            <div class="ri-empty-text">等待今日系统补丁记录...</div>
+        </div>
+        </body>
+        </html>
+        """
+        components.html(empty_html, height=140, scrolling=False)
 
 # ─── Row 5: Correlation ─────────────────────────────────────
 st.markdown('<div class="section-title">睡眠 × 工作效率</div>', unsafe_allow_html=True)
