@@ -9,8 +9,9 @@ body { background: transparent; overflow: visible; }
     background: #FFFFFF;
     border-radius: 18px;
     padding: 1.2rem 1rem;
+    position: relative;
+    overflow: visible;
     box-shadow: 0 2px 20px rgba(60,60,67,0.06), 0 0 1px rgba(60,60,67,0.12);
-    overflow-x: auto;
 }
 .hm-grid {
     display: inline-grid;
@@ -37,9 +38,10 @@ body { background: transparent; overflow: visible; }
 .hm-streak { font-size: 0.65rem; color: #86868B; font-weight: 500; padding-left: 0.5rem; white-space: nowrap; }
 .hm-spacer { pointer-events: none; }
 #hm-popup {
-    display: none; position: fixed; background: #1D1D1F; color: #FFFFFF;
+    display: none; position: absolute; background: #1D1D1F; color: #FFFFFF;
     border-radius: 10px; padding: 0.6rem 0.9rem; font-size: 0.72rem;
-    z-index: 9999; pointer-events: none; min-width: 100px; max-width: 200px;
+    z-index: 9999; pointer-events: none; min-width: 100px; max-width: 220px;
+    max-height: 180px; overflow-y: auto;
     box-shadow: 0 8px 24px rgba(0,0,0,0.25);
 }
 #hm-popup .pop-date { font-weight: 600; margin-bottom: 0.2rem; }
@@ -52,8 +54,8 @@ body { background: transparent; overflow: visible; }
 <body>
 <div class="hm-container">
     <div class="hm-grid" id="grid"></div>
+    <div id="hm-popup"></div>
 </div>
-<div id="hm-popup"></div>
 <script>
 // Minimal Streamlit Component Lib (inline, no external file needed)
 var Streamlit = (function() {
@@ -191,20 +193,19 @@ function showPopup(e) {
     }
     popup.innerHTML = html;
     popup.style.display = "block";
-    popup.style.maxHeight = "180px";
-    popup.style.overflowY = "auto";
-    const rect = cell.getBoundingClientRect();
-    const popH = popup.offsetHeight;
-    let top = rect.top - popH - 8;
-    if (top < 4) {
-        top = rect.bottom + 8;
-    }
-    popup.style.left = Math.max(4, rect.left + rect.width/2 - popup.offsetWidth/2) + "px";
+    const container = document.querySelector('.hm-container');
+    const cellRect = cell.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const left = cellRect.left - containerRect.left + cellRect.width/2 - popup.offsetWidth/2;
+    const top = cellRect.bottom - containerRect.top + 6;
+    popup.style.left = Math.max(4, left) + "px";
     popup.style.top = top + "px";
+    Streamlit.setFrameHeight(container.offsetHeight + popup.offsetHeight + 20);
 }
 
 function hidePopup() {
     document.getElementById("hm-popup").style.display = "none";
+    Streamlit.setFrameHeight(document.querySelector('.hm-container').offsetHeight + 10);
 }
 
 Streamlit.events.addEventListener(Streamlit.RENDER_EVENT, onRender);
