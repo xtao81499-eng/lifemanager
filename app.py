@@ -424,168 +424,40 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ─── Row 1: Time Distribution ───────────────────────────────
-st.markdown('<div class="section-title">时间分布</div>', unsafe_allow_html=True)
+# ─── Global Two-Column Layout ─────────────────────────────────
+_col_main, _col_habit = st.columns([3, 1], gap="medium")
 
-r1c1, r1c2 = st.columns([3, 2])
-
-with r1c1:
-    if not cat.empty:
-        fig_bar = go.Figure()
-        for _, row in cat.iterrows():
-            color = COLORS.get(row["category"], "#8E8E93")
-            fig_bar.add_trace(go.Bar(
-                y=[row["category"]],
-                x=[row["total_hours"]],
-                orientation="h",
-                marker=dict(color=color, cornerradius=6),
-                text=f'{row["total_hours"]:.1f}h',
-                textposition="outside",
-                textfont=dict(color="#1D1D1F", size=11),
-                showlegend=False,
-            ))
-        fig_bar.update_layout(
-            **PLOT_LAYOUT,
-            height=300,
-            barmode="stack",
-            yaxis=dict(categoryorder="total ascending", showgrid=False, color="#1D1D1F"),
-            xaxis=dict(showgrid=False, showticklabels=False),
-        )
-        st.plotly_chart(fig_bar, use_container_width=True, config={"displayModeBar": False})
-
-with r1c2:
-    if not cat.empty:
-        _pie_total = cat["total_hours"].sum()
-        # Only label slices >= 4%; blank the rest to avoid leader-line clutter
-        _pie_text = [
-            f"{v / _pie_total * 100:.0f}%" if _pie_total and v / _pie_total >= 0.04 else ""
-            for v in cat["total_hours"]
-        ]
-        fig_pie = go.Figure(data=[go.Pie(
-            labels=cat["category"],
-            values=cat["total_hours"],
-            hole=0.65,
-            marker=dict(colors=[COLORS.get(c, "#8E8E93") for c in cat["category"]]),
-            text=_pie_text,
-            textinfo="text",
-            textposition="outside",
-            textfont=dict(size=11, color="#1D1D1F"),
-            hovertemplate="%{label}<br>%{value:.1f}h · %{percent}<extra></extra>",
-        )])
-        fig_pie.update_layout(**PLOT_LAYOUT, height=300, showlegend=False)
-        fig_pie.add_annotation(
-            text=f"<b>{total_hours:.0f}h</b>",
-            font=dict(size=20, color="#1D1D1F"),
-            showarrow=False,
-        )
-        st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
-
-# ─── Row 2: Score Trend ─────────────────────────────────────
-if date_span > 1:
-    st.markdown('<div class="section-title">评分趋势</div>', unsafe_allow_html=True)
-
-    if not daily.empty and "avg_score" in daily.columns:
-        fig_trend = go.Figure()
-
-        fig_trend.add_trace(go.Scatter(
-            x=daily["date"],
-            y=daily["avg_score"],
-            mode="lines",
-            line=dict(color="#0A84FF", width=2.5, shape="spline"),
-            fill="tozeroy",
-            fillcolor="rgba(10, 132, 255, 0.06)",
-            hovertemplate="%{x|%m/%d}<br>评分: %{y:.1f}<extra></extra>",
-        ))
-
-        fig_trend.add_trace(go.Scatter(
-            x=daily["date"],
-            y=daily["avg_score"],
-            mode="markers",
-            marker=dict(size=7, color="#0A84FF", line=dict(width=2, color="#FFF")),
-            showlegend=False,
-            hoverinfo="skip",
-        ))
-
-        fig_trend.add_hline(
-            y=avg_score, line_dash="dot", line_color="rgba(142,142,147,0.3)", line_width=1,
-            annotation_text=f"平均 {avg_score:.1f}",
-            annotation_font=dict(color="#86868B", size=11),
-            annotation_position="right",
-        )
-
-        fig_trend.update_layout(
-            **PLOT_LAYOUT,
-            height=280,
-            yaxis=dict(range=[0, 10], showgrid=True, gridcolor="rgba(0,0,0,0.04)",
-                       zeroline=False, dtick=2, color="#1D1D1F"),
-            xaxis=dict(showgrid=False, tickformat="%m/%d", color="#1D1D1F"),
-            showlegend=False,
-        )
-        st.plotly_chart(fig_trend, use_container_width=True, config={"displayModeBar": False})
-
-# ─── Row 3: Habit Heatmap + Reflection Insights (side by side) ──
-_row3_left, _row3_right = st.columns([1.2, 1], gap="medium")
-
-with _row3_left:
+with _col_habit:
     st.markdown('<div class="section-title">习惯追踪</div>', unsafe_allow_html=True)
 
     manual_habits = ["睡前护肤"]
-
     heatmap_cats = ["运动", "学习", "深度复盘/灵感"]
     heatmap_data = df[df["category"].isin(heatmap_cats)].copy()
     date_range = pd.date_range(start=start_date, end=max(end_date, today), freq="D")
-    weekday_labels = ["一", "二", "三", "四", "五", "六", "日"]
 
-    # Build grid data as dict for custom component
-    import html as _html
-    dates_info = []
-    for d in date_range:
-        dates_info.append({
-            "day": d.strftime("%d"),
-            "weekday": weekday_labels[d.weekday()],
-            "iso": d.strftime("%Y-%m-%d"),
-        })
-
-    rows = []
+    habit_rows = []
     for cat_name in heatmap_cats:
         cat_events = heatmap_data[heatmap_data["category"] == cat_name]
         daily_scores = cat_events.groupby("date")["score"].mean()
-        daily_details = cat_events.groupby("date")["detail"].apply(
-            lambda x: "\n".join(s.strip() for s in x if str(s).strip())
-        ) if "detail" in cat_events.columns else pd.Series(dtype=str)
         cells = []
-        active_count = 0
         for d in date_range:
-            if d in daily_scores.index:
-                raw_score = daily_scores[d]
-                score_val = f"{raw_score:.1f}" if pd.notna(raw_score) and raw_score == raw_score else ""
-                detail_text = str(daily_details.get(d, "")).strip() if d in daily_details.index else ""
-                cells.append({"active": True, "score": score_val, "detail": detail_text, "date_display": d.strftime("%m月%d日")})
-                active_count += 1
-            else:
-                cells.append({"active": False, "score": "", "detail": "", "date_display": d.strftime("%m月%d日")})
-        rows.append({"label": cat_name, "cells": cells, "streak": f"{active_count}/{len(date_range)}", "manual": False})
+            cells.append(bool(d in daily_scores.index))
+        habit_rows.append({"label": cat_name, "cells": cells, "manual": False})
 
     for habit_name in manual_habits:
         checked_dates = get_checked_dates(habit_name)
         cells = []
-        active_count = 0
         for d in date_range:
-            date_iso = d.strftime("%Y-%m-%d")
-            is_checked = date_iso in checked_dates
-            cells.append({"active": is_checked, "score": "", "detail": "", "date_display": d.strftime("%m月%d日")})
-            if is_checked:
-                active_count += 1
-        rows.append({"label": habit_name, "cells": cells, "streak": f"{active_count}/{len(date_range)}", "manual": True})
+            cells.append(d.strftime("%Y-%m-%d") in checked_dates)
+        habit_rows.append({"label": habit_name, "cells": cells, "manual": True})
 
-    # Render heatmap via custom component (supports click-to-toggle)
     from datetime import datetime as _dt
     _today_str = _dt.now().strftime("%Y-%m-%d")
-    grid_data = {"dates": dates_info, "rows": rows}
-    num_rows = len(heatmap_cats) + len(manual_habits)
-    hm_height = 80 + num_rows * 42 + 60
+    _dates_list = [{"iso": d.strftime("%Y-%m-%d"), "display": d.strftime("%m/%d"), "weekday": ["一","二","三","四","五","六","日"][d.weekday()]} for d in date_range]
 
-    toggle_result = _heatmap_component(grid_data=grid_data, today_iso=_today_str, height=hm_height, key="habit_heatmap", default=None)
+    _vert_data = {"dates": _dates_list, "habits": habit_rows, "today_iso": _today_str}
+    _vert_height = 120 + len(date_range) * 32
+    toggle_result = _heatmap_component(grid_data=_vert_data, today_iso=_today_str, height=_vert_height, key="habit_heatmap", default=None)
     if toggle_result and toggle_result != st.session_state.get("_last_toggle"):
         st.session_state["_last_toggle"] = toggle_result
         parts = toggle_result.split("|")
@@ -601,7 +473,106 @@ with _row3_left:
                     toggle_habit(habit, date_str)
             st.rerun()
 
-with _row3_right:
+with _col_main:
+    # ─── Time Distribution ─────────────────────────────────────
+    st.markdown('<div class="section-title">时间分布</div>', unsafe_allow_html=True)
+
+    r1c1, r1c2 = st.columns([3, 2])
+
+    with r1c1:
+        if not cat.empty:
+            fig_bar = go.Figure()
+            for _, row in cat.iterrows():
+                color = COLORS.get(row["category"], "#8E8E93")
+                fig_bar.add_trace(go.Bar(
+                    y=[row["category"]],
+                    x=[row["total_hours"]],
+                    orientation="h",
+                    marker=dict(color=color, cornerradius=6),
+                    text=f'{row["total_hours"]:.1f}h',
+                    textposition="outside",
+                    textfont=dict(color="#1D1D1F", size=11),
+                    showlegend=False,
+                ))
+            fig_bar.update_layout(
+                **PLOT_LAYOUT,
+                height=300,
+                barmode="stack",
+                yaxis=dict(categoryorder="total ascending", showgrid=False, color="#1D1D1F"),
+                xaxis=dict(showgrid=False, showticklabels=False),
+            )
+            st.plotly_chart(fig_bar, use_container_width=True, config={"displayModeBar": False})
+
+    with r1c2:
+        if not cat.empty:
+            _pie_total = cat["total_hours"].sum()
+            _pie_text = [
+                f"{v / _pie_total * 100:.0f}%" if _pie_total and v / _pie_total >= 0.04 else ""
+                for v in cat["total_hours"]
+            ]
+            fig_pie = go.Figure(data=[go.Pie(
+                labels=cat["category"],
+                values=cat["total_hours"],
+                hole=0.65,
+                marker=dict(colors=[COLORS.get(c, "#8E8E93") for c in cat["category"]]),
+                text=_pie_text,
+                textinfo="text",
+                textposition="outside",
+                textfont=dict(size=11, color="#1D1D1F"),
+                hovertemplate="%{label}<br>%{value:.1f}h · %{percent}<extra></extra>",
+            )])
+            fig_pie.update_layout(**PLOT_LAYOUT, height=300, showlegend=False)
+            fig_pie.add_annotation(
+                text=f"<b>{total_hours:.0f}h</b>",
+                font=dict(size=20, color="#1D1D1F"),
+                showarrow=False,
+            )
+            st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
+
+    # ─── Score Trend ───────────────────────────────────────────
+    if date_span > 1:
+        st.markdown('<div class="section-title">评分趋势</div>', unsafe_allow_html=True)
+
+        if not daily.empty and "avg_score" in daily.columns:
+            fig_trend = go.Figure()
+
+            fig_trend.add_trace(go.Scatter(
+                x=daily["date"],
+                y=daily["avg_score"],
+                mode="lines",
+                line=dict(color="#0A84FF", width=2.5, shape="spline"),
+                fill="tozeroy",
+                fillcolor="rgba(10, 132, 255, 0.06)",
+                hovertemplate="%{x|%m/%d}<br>评分: %{y:.1f}<extra></extra>",
+            ))
+
+            fig_trend.add_trace(go.Scatter(
+                x=daily["date"],
+                y=daily["avg_score"],
+                mode="markers",
+                marker=dict(size=7, color="#0A84FF", line=dict(width=2, color="#FFF")),
+                showlegend=False,
+                hoverinfo="skip",
+            ))
+
+            fig_trend.add_hline(
+                y=avg_score, line_dash="dot", line_color="rgba(142,142,147,0.3)", line_width=1,
+                annotation_text=f"平均 {avg_score:.1f}",
+                annotation_font=dict(color="#86868B", size=11),
+                annotation_position="right",
+            )
+
+            fig_trend.update_layout(
+                **PLOT_LAYOUT,
+                height=280,
+                yaxis=dict(range=[0, 10], showgrid=True, gridcolor="rgba(0,0,0,0.04)",
+                           zeroline=False, dtick=2, color="#1D1D1F"),
+                xaxis=dict(showgrid=False, tickformat="%m/%d", color="#1D1D1F"),
+                showlegend=False,
+            )
+            st.plotly_chart(fig_trend, use_container_width=True, config={"displayModeBar": False})
+
+    # ─── Reflection Insights ──────────────────────────────────
     st.markdown('<div class="section-title">反思洞察</div>', unsafe_allow_html=True)
 
     @st.cache_data(ttl=600)
@@ -746,65 +717,65 @@ with _row3_right:
         """
         components.html(empty_html, height=140, scrolling=False)
 
-# ─── Row 5: Correlation ─────────────────────────────────────
-st.markdown('<div class="section-title">睡眠 × 工作效率</div>', unsafe_allow_html=True)
+    # ─── Correlation ───────────────────────────────────────────
+    st.markdown('<div class="section-title">睡眠 × 工作效率</div>', unsafe_allow_html=True)
 
-corr_data = sleep_work_correlation(df)
-if not corr_data.empty and len(corr_data) >= 3:
-    fig_corr = go.Figure()
+    corr_data = sleep_work_correlation(df)
+    if not corr_data.empty and len(corr_data) >= 3:
+        fig_corr = go.Figure()
 
-    fig_corr.add_trace(go.Scatter(
-        x=corr_data["sleep_hours"],
-        y=corr_data["work_score"],
-        mode="markers",
-        marker=dict(
-            size=12,
-            color=corr_data["work_score"],
-            colorscale=[[0, "#FF3B30"], [0.5, "#FF9500"], [1, "#34C759"]],
-            cmin=0, cmax=10,
-            line=dict(width=1.5, color="#FFFFFF"),
-        ),
-        hovertemplate="睡眠: %{x:.1f}h<br>工作评分: %{y:.1f}<extra></extra>",
-    ))
-
-    if len(corr_data) >= 2:
-        z = np.polyfit(corr_data["sleep_hours"], corr_data["work_score"], 1)
-        p = np.poly1d(z)
-        x_line = np.linspace(corr_data["sleep_hours"].min(), corr_data["sleep_hours"].max(), 50)
         fig_corr.add_trace(go.Scatter(
-            x=x_line, y=p(x_line),
-            mode="lines",
-            line=dict(color="rgba(142,142,147,0.4)", dash="dot", width=1.5),
-            showlegend=False,
-            hoverinfo="skip",
+            x=corr_data["sleep_hours"],
+            y=corr_data["work_score"],
+            mode="markers",
+            marker=dict(
+                size=12,
+                color=corr_data["work_score"],
+                colorscale=[[0, "#FF3B30"], [0.5, "#FF9500"], [1, "#34C759"]],
+                cmin=0, cmax=10,
+                line=dict(width=1.5, color="#FFFFFF"),
+            ),
+            hovertemplate="睡眠: %{x:.1f}h<br>工作评分: %{y:.1f}<extra></extra>",
         ))
 
-    r_value = corr_data["sleep_hours"].corr(corr_data["work_score"])
-    fig_corr.update_layout(
-        **PLOT_LAYOUT,
-        height=300,
-        xaxis=dict(title="睡眠时长 (h)", showgrid=True, gridcolor="rgba(0,0,0,0.04)",
-                   zeroline=False, color="#1D1D1F"),
-        yaxis=dict(title="次日工作评分", showgrid=True, gridcolor="rgba(0,0,0,0.04)",
-                   range=[0, 10], zeroline=False, color="#1D1D1F"),
-        showlegend=False,
-    )
-    st.plotly_chart(fig_corr, use_container_width=True, config={"displayModeBar": False})
+        if len(corr_data) >= 2:
+            z = np.polyfit(corr_data["sleep_hours"], corr_data["work_score"], 1)
+            p = np.poly1d(z)
+            x_line = np.linspace(corr_data["sleep_hours"].min(), corr_data["sleep_hours"].max(), 50)
+            fig_corr.add_trace(go.Scatter(
+                x=x_line, y=p(x_line),
+                mode="lines",
+                line=dict(color="rgba(142,142,147,0.4)", dash="dot", width=1.5),
+                showlegend=False,
+                hoverinfo="skip",
+            ))
 
-    if r_value > 0.3:
-        insight = "睡眠充足时工作表现明显更好"
-    elif r_value < -0.3:
-        insight = "过多睡眠似乎降低了工作效率"
+        r_value = corr_data["sleep_hours"].corr(corr_data["work_score"])
+        fig_corr.update_layout(
+            **PLOT_LAYOUT,
+            height=300,
+            xaxis=dict(title="睡眠时长 (h)", showgrid=True, gridcolor="rgba(0,0,0,0.04)",
+                       zeroline=False, color="#1D1D1F"),
+            yaxis=dict(title="次日工作评分", showgrid=True, gridcolor="rgba(0,0,0,0.04)",
+                       range=[0, 10], zeroline=False, color="#1D1D1F"),
+            showlegend=False,
+        )
+        st.plotly_chart(fig_corr, use_container_width=True, config={"displayModeBar": False})
+
+        if r_value > 0.3:
+            insight = "睡眠充足时工作表现明显更好"
+        elif r_value < -0.3:
+            insight = "过多睡眠似乎降低了工作效率"
+        else:
+            insight = "睡眠时长与工作效率暂无明显关联"
+
+        st.markdown(f'<p class="insight-text">r = {r_value:.2f} · {insight} · {len(corr_data)} 天数据</p>', unsafe_allow_html=True)
     else:
-        insight = "睡眠时长与工作效率暂无明显关联"
-
-    st.markdown(f'<p class="insight-text">r = {r_value:.2f} · {insight} · {len(corr_data)} 天数据</p>', unsafe_allow_html=True)
-else:
-    st.markdown("""
-    <div class="card" style="text-align:center;">
-        <p style="color:#86868B; margin:0; font-size:0.85rem;">需要至少 3 天睡眠+工作数据才能分析</p>
-    </div>
-    """, unsafe_allow_html=True)
+        st.markdown("""
+        <div class="card" style="text-align:center;">
+            <p style="color:#86868B; margin:0; font-size:0.85rem;">需要至少 3 天睡眠+工作数据才能分析</p>
+        </div>
+        """, unsafe_allow_html=True)
 
 # ─── Footer ──────────────────────────────────────────────────
 st.markdown('<br><p style="color:#D1D1D6; text-align:center; font-size:0.7rem;">Life Manager v0.2 · 界面精修</p>', unsafe_allow_html=True)

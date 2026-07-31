@@ -8,202 +8,169 @@ body { background: transparent; overflow: visible; }
 .hm-container {
     background: #FFFFFF;
     border-radius: 18px;
-    padding: 1.2rem 1rem;
-    position: relative;
-    overflow: visible;
+    padding: 1rem 0.8rem;
     box-shadow: 0 2px 20px rgba(60,60,67,0.06), 0 0 1px rgba(60,60,67,0.12);
 }
-.hm-grid {
-    display: inline-grid;
-    column-gap: 3px;
-    row-gap: 4px;
-    align-items: center;
+.hm-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 2px;
 }
-.hm-date-label {
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    font-weight: 600; color: #1D1D1F; line-height: 1.2;
+.hm-table th {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: #1D1D1F;
+    padding: 0.4rem 0.2rem;
+    text-align: center;
+    white-space: nowrap;
 }
-.hm-date-label span { font-weight: 400; color: #86868B; }
-.hm-label { font-size: 0.78rem; font-weight: 500; color: #1D1D1F; text-align: right; padding-right: 0.8rem; white-space: nowrap; }
-.hm-cell {
-    border-radius: 5px;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
-    cursor: default; position: relative; justify-self: center;
+.hm-table td {
+    padding: 2px;
+    text-align: center;
+    vertical-align: middle;
 }
-.hm-cell:hover { transform: scale(1.2); box-shadow: 0 4px 12px rgba(60,60,67,0.14); z-index: 10; }
-.hm-active { background: #34C759; }
-.hm-empty { background: #E5E5EA; }
-.hm-today-manual { cursor: pointer; box-shadow: 0 0 0 2px #0A84FF; }
-.hm-today-manual:active { transform: scale(0.85); }
-.hm-streak { font-size: 0.65rem; color: #86868B; font-weight: 500; padding-left: 0.5rem; white-space: nowrap; }
-.hm-spacer { pointer-events: none; }
-#hm-popup {
-    display: none; position: absolute; background: #1D1D1F; color: #FFFFFF;
-    border-radius: 10px; padding: 0.6rem 0.9rem; font-size: 0.72rem;
-    z-index: 9999; pointer-events: none; min-width: 100px; max-width: 220px;
-    max-height: 180px; overflow-y: auto;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+.hm-date-cell {
+    font-size: 0.68rem;
+    font-weight: 500;
+    color: #86868B;
+    padding-right: 0.5rem;
+    text-align: right;
+    white-space: nowrap;
 }
-#hm-popup .pop-date { font-weight: 600; margin-bottom: 0.2rem; }
-#hm-popup .pop-score { color: #34C759; font-weight: 600; margin-bottom: 0.3rem; }
-#hm-popup .pop-detail { border-top: 1px solid rgba(255,255,255,0.15); padding-top: 0.35rem; margin-top: 0.2rem; }
-#hm-popup .pop-detail-line { color: #E5E5EA; line-height: 1.5; font-size: 0.68rem; }
-#hm-popup .pop-empty { color: #86868B; font-style: italic; }
+.hm-date-cell.is-today {
+    color: #0A84FF;
+    font-weight: 600;
+}
+.hm-dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    margin: 0 auto;
+    transition: transform 0.15s ease;
+}
+.hm-dot.active { background: #34C759; }
+.hm-dot.empty { background: #F0F0F2; }
+.hm-dot.today-manual {
+    cursor: pointer;
+    box-shadow: 0 0 0 2px #0A84FF;
+}
+.hm-dot.today-manual:hover { transform: scale(1.3); }
+.hm-dot.today-manual:active { transform: scale(0.85); }
+.hm-streak {
+    font-size: 0.62rem;
+    color: #86868B;
+    text-align: center;
+    padding-top: 0.3rem;
+    font-weight: 500;
+}
 </style>
 </head>
 <body>
 <div class="hm-container">
-    <div class="hm-grid" id="grid"></div>
-    <div id="hm-popup"></div>
+    <table class="hm-table" id="grid"></table>
 </div>
 <script>
-// Minimal Streamlit Component Lib (inline, no external file needed)
 var Streamlit = (function() {
     var lastArgs = null;
     var renderCallbacks = [];
-
     function sendMessage(type, data) {
         window.parent.postMessage(Object.assign({type: type, isStreamlitMessage: true}, data), "*");
     }
-
     window.addEventListener("message", function(e) {
         if (!e.data || !e.data.type) return;
         if (e.data.type === "streamlit:render") {
             lastArgs = e.data.args;
-            renderCallbacks.forEach(function(cb) {
-                cb({detail: {args: e.data.args}});
-            });
+            renderCallbacks.forEach(function(cb) { cb({detail: {args: e.data.args}}); });
         }
     });
-
     return {
         setComponentReady: function() { sendMessage("streamlit:componentReady", {apiVersion: 1}); },
         setComponentValue: function(value) { sendMessage("streamlit:setComponentValue", {value: value}); },
         setFrameHeight: function(h) { sendMessage("streamlit:setFrameHeight", {height: h || document.body.scrollHeight}); },
         RENDER_EVENT: "render",
-        events: {
-            addEventListener: function(type, cb) { renderCallbacks.push(cb); if (lastArgs) cb({detail: {args: lastArgs}}); }
-        }
+        events: { addEventListener: function(type, cb) { renderCallbacks.push(cb); if (lastArgs) cb({detail: {args: lastArgs}}); } }
     };
 })();
 </script>
 <script>
-let clickTimer = null;
+var clickTimer = null;
 
 function onRender(event) {
-    const data = event.detail.args.grid_data;
-    const todayIso = event.detail.args.today_iso;
-    const cols = data.dates.length;
-    const container = document.querySelector('.hm-container');
-    const availWidth = container.clientWidth - 32 - 80 - 36;
-    const cellSize = Math.max(14, Math.min(24, Math.floor((availWidth - (cols - 1) * 3) / cols)));
-    const grid = document.getElementById("grid");
+    var data = event.detail.args.grid_data;
+    var todayIso = event.detail.args.today_iso;
+    var dates = data.dates;
+    var habits = data.habits;
+    var grid = document.getElementById("grid");
     grid.innerHTML = "";
-    grid.style.gridTemplateColumns = "5rem repeat(" + cols + ", " + cellSize + "px) auto";
 
-    // Header row
-    grid.appendChild(el("div", "hm-spacer", ""));
-    data.dates.forEach(function(d) {
-        const h = el("div", "hm-date-label", "");
-        h.innerHTML = d.day + '<span>' + d.weekday + '</span>';
-        h.style.fontSize = Math.max(9, Math.min(12, Math.floor(cellSize / 2))) + "px";
-        grid.appendChild(h);
+    // Header row: empty + habit labels
+    var thead = "<tr><th></th>";
+    habits.forEach(function(h) {
+        var shortLabel = h.label.length > 4 ? h.label.substring(0, 4) : h.label;
+        thead += "<th>" + shortLabel + "</th>";
     });
-    grid.appendChild(el("div", "hm-spacer", ""));
+    thead += "</tr>";
+    grid.innerHTML += thead;
 
-    // Data rows
-    data.rows.forEach(function(row) {
-        grid.appendChild(el("div", "hm-label", row.label));
-        row.cells.forEach(function(c, i) {
-            const cell = document.createElement("div");
-            const iso = data.dates[i].iso;
-            const isToday = iso === todayIso;
-            let cls = "hm-cell " + (c.active ? "hm-active" : "hm-empty");
-            if (row.manual && isToday) cls += " hm-today-manual";
-            cell.className = cls;
-            cell.style.width = cellSize + "px";
-            cell.style.height = cellSize + "px";
-            if (row.manual) {
-                cell.dataset.habit = row.label;
-                cell.dataset.iso = iso;
-            }
-            if (c.score) cell.dataset.score = c.score;
-            if (c.detail) cell.dataset.detail = c.detail;
-            cell.dataset.date = c.date_display || "";
-            cell.addEventListener("mouseenter", showPopup);
-            cell.addEventListener("mouseleave", hidePopup);
-            if (row.manual && isToday) {
-                cell.addEventListener("click", function() { onTodayClick(cell); });
-            }
-            grid.appendChild(cell);
+    // Data rows: one per date
+    dates.forEach(function(d, di) {
+        var isToday = d.iso === todayIso;
+        var tr = "<tr>";
+        tr += '<td class="hm-date-cell' + (isToday ? ' is-today' : '') + '">' + d.display + ' ' + d.weekday + '</td>';
+        habits.forEach(function(h, hi) {
+            var active = h.cells[di];
+            var isManualToday = h.manual && isToday;
+            var cls = "hm-dot " + (active ? "active" : "empty");
+            if (isManualToday) cls += " today-manual";
+            var id = "c_" + hi + "_" + di;
+            tr += '<td><div class="' + cls + '" id="' + id + '" data-habit="' + h.label + '" data-iso="' + d.iso + '" data-manual="' + h.manual + '" data-today="' + isManualToday + '"></div></td>';
         });
-        grid.appendChild(el("div", "hm-streak", row.streak));
+        tr += "</tr>";
+        grid.innerHTML += tr;
     });
 
-    Streamlit.setFrameHeight(document.querySelector('.hm-container').offsetHeight + 200);
-}
+    // Streak row
+    var streakRow = "<tr><td></td>";
+    habits.forEach(function(h) {
+        var count = h.cells.filter(function(c) { return c; }).length;
+        streakRow += '<td class="hm-streak">' + count + '/' + h.cells.length + '</td>';
+    });
+    streakRow += "</tr>";
+    grid.innerHTML += streakRow;
 
-function el(tag, cls, text) {
-    const e = document.createElement(tag);
-    e.className = cls;
-    e.textContent = text;
-    return e;
+    // Attach click handlers to today's manual cells
+    habits.forEach(function(h, hi) {
+        if (!h.manual) return;
+        dates.forEach(function(d, di) {
+            if (d.iso !== todayIso) return;
+            var cell = document.getElementById("c_" + hi + "_" + di);
+            if (cell) cell.addEventListener("click", function() { onTodayClick(cell); });
+        });
+    });
+
+    Streamlit.setFrameHeight(document.querySelector('.hm-container').offsetHeight + 10);
 }
 
 function onTodayClick(cell) {
-    const habit = cell.dataset.habit;
-    const iso = cell.dataset.iso;
-    const isActive = cell.classList.contains("hm-active");
+    var habit = cell.dataset.habit;
+    var iso = cell.dataset.iso;
+    var isActive = cell.classList.contains("active");
 
     if (!isActive) {
-        cell.classList.remove("hm-empty");
-        cell.classList.add("hm-active");
+        cell.classList.remove("empty");
+        cell.classList.add("active");
         Streamlit.setComponentValue(habit + "|" + iso + "|check|" + Date.now());
     } else {
         if (clickTimer) {
             clearTimeout(clickTimer);
             clickTimer = null;
-            cell.classList.remove("hm-active");
-            cell.classList.add("hm-empty");
+            cell.classList.remove("active");
+            cell.classList.add("empty");
             Streamlit.setComponentValue(habit + "|" + iso + "|uncheck|" + Date.now());
         } else {
             clickTimer = setTimeout(function() { clickTimer = null; }, 400);
         }
     }
-}
-
-function showPopup(e) {
-    const cell = e.currentTarget;
-    const popup = document.getElementById("hm-popup");
-    const dateStr = cell.dataset.date || "";
-    if (!dateStr) return;
-    let html = '<div class="pop-date">' + dateStr + '</div>';
-    const score = cell.dataset.score || "";
-    if (score) {
-        html += '<div class="pop-score">' + score + '/10</div>';
-    } else if (cell.classList.contains("hm-active")) {
-        html += '<div class="pop-score">已完成</div>';
-    } else {
-        html += '<div class="pop-empty">未记录</div>';
-    }
-    const detail = cell.dataset.detail || "";
-    if (detail) {
-        const lines = detail.split("\n").filter(function(l) { return l.trim(); });
-        html += '<div class="pop-detail">' + lines.map(function(l) { return '<div class="pop-detail-line">' + l + '</div>'; }).join('') + '</div>';
-    }
-    popup.innerHTML = html;
-    popup.style.display = "block";
-    const container = document.querySelector('.hm-container');
-    const cellRect = cell.getBoundingClientRect();
-    const containerRect = container.getBoundingClientRect();
-    const left = cellRect.left - containerRect.left + cellRect.width/2 - popup.offsetWidth/2;
-    const top = cellRect.bottom - containerRect.top + 6;
-    popup.style.left = Math.max(4, left) + "px";
-    popup.style.top = top + "px";
-}
-
-function hidePopup() {
-    document.getElementById("hm-popup").style.display = "none";
 }
 
 Streamlit.events.addEventListener(Streamlit.RENDER_EVENT, onRender);
