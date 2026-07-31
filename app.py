@@ -530,7 +530,7 @@ manual_habits = ["睡前护肤"]
 
 heatmap_cats = ["运动", "学习", "深度复盘/灵感"]
 heatmap_data = df[df["category"].isin(heatmap_cats)].copy()
-date_range = pd.date_range(start=start_date, end=end_date, freq="D")
+date_range = pd.date_range(start=start_date, end=max(end_date, today), freq="D")
 weekday_labels = ["一", "二", "三", "四", "五", "六", "日"]
 
 # Build grid data as dict for custom component

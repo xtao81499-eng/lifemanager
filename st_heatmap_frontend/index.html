@@ -140,7 +140,7 @@ function onRender(event) {
         grid.appendChild(el("div", "hm-streak", row.streak));
     });
 
-    Streamlit.setFrameHeight(document.querySelector('.hm-container').offsetHeight + 10);
+    Streamlit.setFrameHeight(document.querySelector('.hm-container').offsetHeight + 200);
 }
 
 function el(tag, cls, text) {
@@ -200,12 +200,10 @@ function showPopup(e) {
     const top = cellRect.bottom - containerRect.top + 6;
     popup.style.left = Math.max(4, left) + "px";
     popup.style.top = top + "px";
-    Streamlit.setFrameHeight(container.offsetHeight + popup.offsetHeight + 20);
 }
 
 function hidePopup() {
     document.getElementById("hm-popup").style.display = "none";
-    Streamlit.setFrameHeight(document.querySelector('.hm-container').offsetHeight + 10);
 }
 
 Streamlit.events.addEventListener(Streamlit.RENDER_EVENT, onRender);
