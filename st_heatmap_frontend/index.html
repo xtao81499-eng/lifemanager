@@ -8,7 +8,7 @@ body { background: transparent; overflow: visible; }
 .hm-container {
     background: #FFFFFF;
     border-radius: 18px;
-    padding: 1.5rem 1.8rem;
+    padding: 1.2rem 1rem;
     box-shadow: 0 2px 20px rgba(60,60,67,0.06), 0 0 1px rgba(60,60,67,0.12);
     overflow-x: auto;
 }
@@ -92,10 +92,12 @@ function onRender(event) {
     const data = event.detail.args.grid_data;
     const todayIso = event.detail.args.today_iso;
     const cols = data.dates.length;
-    const cellSize = Math.max(16, Math.min(28, Math.floor(700 / cols)));
+    const container = document.querySelector('.hm-container');
+    const availWidth = container.clientWidth - 32 - 80 - 36;
+    const cellSize = Math.max(14, Math.min(24, Math.floor((availWidth - (cols - 1) * 3) / cols)));
     const grid = document.getElementById("grid");
     grid.innerHTML = "";
-    grid.style.gridTemplateColumns = "5.5rem repeat(" + cols + ", " + cellSize + "px) auto";
+    grid.style.gridTemplateColumns = "5rem repeat(" + cols + ", " + cellSize + "px) auto";
 
     // Header row
     grid.appendChild(el("div", "hm-spacer", ""));
