@@ -191,9 +191,16 @@ function showPopup(e) {
     }
     popup.innerHTML = html;
     popup.style.display = "block";
+    popup.style.maxHeight = "180px";
+    popup.style.overflowY = "auto";
     const rect = cell.getBoundingClientRect();
-    popup.style.left = (rect.left + rect.width/2 - popup.offsetWidth/2) + "px";
-    popup.style.top = (rect.top - popup.offsetHeight - 8) + "px";
+    const popH = popup.offsetHeight;
+    let top = rect.top - popH - 8;
+    if (top < 4) {
+        top = rect.bottom + 8;
+    }
+    popup.style.left = Math.max(4, rect.left + rect.width/2 - popup.offsetWidth/2) + "px";
+    popup.style.top = top + "px";
 }
 
 function hidePopup() {
