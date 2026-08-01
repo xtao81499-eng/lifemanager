@@ -9,6 +9,7 @@ body { background: transparent; overflow: visible; }
     background: #FFFFFF;
     border-radius: 18px;
     padding: 1rem 0.8rem;
+    position: relative;
     box-shadow: 0 2px 20px rgba(60,60,67,0.06), 0 0 1px rgba(60,60,67,0.12);
 }
 .hm-table {
@@ -47,14 +48,15 @@ body { background: transparent; overflow: visible; }
     border-radius: 4px;
     margin: 0 auto;
     transition: transform 0.15s ease;
+    cursor: default;
 }
+.hm-dot:hover { transform: scale(1.3); }
 .hm-dot.active { background: #34C759; }
 .hm-dot.empty { background: #F0F0F2; }
 .hm-dot.today-manual {
     cursor: pointer;
     box-shadow: 0 0 0 2px #0A84FF;
 }
-.hm-dot.today-manual:hover { transform: scale(1.3); }
 .hm-dot.today-manual:active { transform: scale(0.85); }
 .hm-streak {
     font-size: 0.62rem;
@@ -63,11 +65,30 @@ body { background: transparent; overflow: visible; }
     padding-top: 0.3rem;
     font-weight: 500;
 }
+#hm-popup {
+    display: none;
+    position: absolute;
+    background: #1D1D1F;
+    color: #FFFFFF;
+    border-radius: 8px;
+    padding: 0.5rem 0.7rem;
+    font-size: 0.7rem;
+    z-index: 9999;
+    pointer-events: none;
+    min-width: 80px;
+    max-width: 180px;
+    max-height: 150px;
+    overflow-y: auto;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+    white-space: pre-wrap;
+    line-height: 1.4;
+}
 </style>
 </head>
 <body>
 <div class="hm-container">
     <table class="hm-table" id="grid"></table>
+    <div id="hm-popup"></div>
 </div>
 <script>
 var Streamlit = (function() {
@@ -103,7 +124,7 @@ function onRender(event) {
     var grid = document.getElementById("grid");
     grid.innerHTML = "";
 
-    // Header row: empty + habit labels
+    // Header row
     var thead = "<tr><th></th>";
     habits.forEach(function(h) {
         var shortLabel = h.label.length > 4 ? h.label.substring(0, 4) : h.label;
@@ -112,18 +133,29 @@ function onRender(event) {
     thead += "</tr>";
     grid.innerHTML += thead;
 
-    // Data rows: one per date
+    // Data rows
     dates.forEach(function(d, di) {
         var isToday = d.iso === todayIso;
         var tr = "<tr>";
         tr += '<td class="hm-date-cell' + (isToday ? ' is-today' : '') + '">' + d.display + ' ' + d.weekday + '</td>';
         habits.forEach(function(h, hi) {
-            var active = h.cells[di];
+            var cell = h.cells[di];
+            var active = (typeof cell === "object") ? cell.active : cell;
+            var score = (typeof cell === "object") ? (cell.score || "") : "";
+            var detail = (typeof cell === "object") ? (cell.detail || "") : "";
             var isManualToday = h.manual && isToday;
             var cls = "hm-dot " + (active ? "active" : "empty");
             if (isManualToday) cls += " today-manual";
             var id = "c_" + hi + "_" + di;
-            tr += '<td><div class="' + cls + '" id="' + id + '" data-habit="' + h.label + '" data-iso="' + d.iso + '" data-manual="' + h.manual + '" data-today="' + isManualToday + '"></div></td>';
+            tr += '<td><div class="' + cls + '" id="' + id + '"'
+                + ' data-habit="' + h.label + '"'
+                + ' data-iso="' + d.iso + '"'
+                + ' data-manual="' + h.manual + '"'
+                + ' data-today="' + isManualToday + '"'
+                + ' data-score="' + score + '"'
+                + ' data-detail="' + detail.replace(/"/g, '&quot;') + '"'
+                + ' data-date="' + d.display + '"'
+                + '></div></td>';
         });
         tr += "</tr>";
         grid.innerHTML += tr;
@@ -132,20 +164,20 @@ function onRender(event) {
     // Streak row
     var streakRow = "<tr><td></td>";
     habits.forEach(function(h) {
-        var count = h.cells.filter(function(c) { return c; }).length;
+        var count = h.cells.filter(function(c) { return (typeof c === "object") ? c.active : c; }).length;
         streakRow += '<td class="hm-streak">' + count + '/' + h.cells.length + '</td>';
     });
     streakRow += "</tr>";
     grid.innerHTML += streakRow;
 
-    // Attach click handlers to today's manual cells
-    habits.forEach(function(h, hi) {
-        if (!h.manual) return;
-        dates.forEach(function(d, di) {
-            if (d.iso !== todayIso) return;
-            var cell = document.getElementById("c_" + hi + "_" + di);
-            if (cell) cell.addEventListener("click", function() { onTodayClick(cell); });
-        });
+    // Attach event handlers
+    var allDots = document.querySelectorAll(".hm-dot");
+    allDots.forEach(function(dot) {
+        dot.addEventListener("mouseenter", showPopup);
+        dot.addEventListener("mouseleave", hidePopup);
+        if (dot.dataset.today === "true") {
+            dot.addEventListener("click", function() { onTodayClick(dot); });
+        }
     });
 
     Streamlit.setFrameHeight(document.querySelector('.hm-container').offsetHeight + 10);
@@ -171,6 +203,42 @@ function onTodayClick(cell) {
             clickTimer = setTimeout(function() { clickTimer = null; }, 400);
         }
     }
+}
+
+function showPopup(e) {
+    var dot = e.currentTarget;
+    var score = dot.dataset.score;
+    var detail = dot.dataset.detail;
+    var dateStr = dot.dataset.date;
+    var isActive = dot.classList.contains("active");
+
+    if (!isActive && !score) return;
+
+    var popup = document.getElementById("hm-popup");
+    var html = '<b>' + dateStr + '</b>\n';
+    if (score) {
+        html += '评分: ' + score + '/10\n';
+    } else if (isActive) {
+        html += '已完成\n';
+    }
+    if (detail) {
+        html += detail;
+    }
+    popup.innerHTML = html;
+    popup.style.display = "block";
+
+    var container = document.querySelector('.hm-container');
+    var dotRect = dot.getBoundingClientRect();
+    var containerRect = container.getBoundingClientRect();
+    var left = dotRect.left - containerRect.left - popup.offsetWidth - 8;
+    if (left < 4) left = dotRect.right - containerRect.left + 8;
+    var top = dotRect.top - containerRect.top + dotRect.height / 2 - popup.offsetHeight / 2;
+    popup.style.left = left + "px";
+    popup.style.top = Math.max(4, top) + "px";
+}
+
+function hidePopup() {
+    document.getElementById("hm-popup").style.display = "none";
 }
 
 Streamlit.events.addEventListener(Streamlit.RENDER_EVENT, onRender);

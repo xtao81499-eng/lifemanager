@@ -439,16 +439,26 @@ with _col_habit:
     for cat_name in heatmap_cats:
         cat_events = heatmap_data[heatmap_data["category"] == cat_name]
         daily_scores = cat_events.groupby("date")["score"].mean()
+        daily_details = cat_events.groupby("date")["detail"].apply(
+            lambda x: "\n".join(s.strip() for s in x if str(s).strip())
+        ) if "detail" in cat_events.columns else pd.Series(dtype=str)
         cells = []
         for d in date_range:
-            cells.append(bool(d in daily_scores.index))
+            if d in daily_scores.index:
+                raw = daily_scores[d]
+                score_val = f"{raw:.1f}" if pd.notna(raw) else ""
+                detail_text = str(daily_details.get(d, "")).strip() if d in daily_details.index else ""
+                cells.append({"active": True, "score": score_val, "detail": detail_text})
+            else:
+                cells.append({"active": False, "score": "", "detail": ""})
         habit_rows.append({"label": cat_name, "cells": cells, "manual": False})
 
     for habit_name in manual_habits:
         checked_dates = get_checked_dates(habit_name)
         cells = []
         for d in date_range:
-            cells.append(d.strftime("%Y-%m-%d") in checked_dates)
+            date_iso = d.strftime("%Y-%m-%d")
+            cells.append({"active": date_iso in checked_dates, "score": "", "detail": ""})
         habit_rows.append({"label": habit_name, "cells": cells, "manual": True})
 
     from datetime import datetime as _dt
