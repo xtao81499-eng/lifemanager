@@ -300,19 +300,19 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ─── Color Palette (matching Google Calendar) ────────────────
+# ─── Color Palette (from Google Calendar API backgroundColor) ──
 COLORS = {
-    "工作": "#d50000",
-    "学习": "#039be5",
-    "运动": "#33b679",
-    "睡眠": "#7986cb",
-    "社交": "#e67c73",
+    "工作": "#f83a22",
+    "学习": "#16a765",
+    "运动": "#039be5",
+    "睡眠": "#3f51b5",
+    "社交": "#9a9cff",
     "餐饮": "#f4511e",
-    "生活": "#f6bf26",
-    "通勤": "#616161",
-    "拖延": "#f6bf26",
-    "家庭": "#8e24aa",
-    "基础/洗漱": "#0b8043",
+    "生活": "#b99aff",
+    "通勤": "#b4b8b1",
+    "拖延": "#fbd14a",
+    "家庭": "#f4511e",
+    "基础/洗漱": "#33b679",
     "深度复盘/灵感": "#9fe1e7",
 }
 
