@@ -144,14 +144,15 @@ function onRender(event) {
             var score = (typeof cell === "object") ? (cell.score || "") : "";
             var detail = (typeof cell === "object") ? (cell.detail || "") : "";
             var isManualToday = h.manual && isToday;
+            var isManualAny = h.manual;
             var cls = "hm-dot " + (active ? "active" : "empty");
-            if (isManualToday) cls += " today-manual";
+            if (isManualAny) cls += " today-manual";
             var id = "c_" + hi + "_" + di;
             tr += '<td><div class="' + cls + '" id="' + id + '"'
                 + ' data-habit="' + h.label + '"'
                 + ' data-iso="' + d.iso + '"'
                 + ' data-manual="' + h.manual + '"'
-                + ' data-today="' + isManualToday + '"'
+                + ' data-today="' + isManualAny + '"'
                 + ' data-score="' + score + '"'
                 + ' data-detail="' + detail.replace(/"/g, '&quot;') + '"'
                 + ' data-date="' + d.display + '"'
