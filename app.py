@@ -19,6 +19,7 @@ from core.data_processing import (
 )
 from core.gdrive import get_reflection_insights
 from core.manual_habits import get_checked_dates, toggle as toggle_habit
+from core.wishlist import load_items as wl_load, add_item as wl_add, add_savings as wl_save, remove_item as wl_remove
 
 from pathlib import Path as _Path
 _heatmap_component = components.declare_component(
@@ -787,6 +788,71 @@ with _col_main:
             <p style="color:#86868B; margin:0; font-size:0.85rem;">需要至少 3 天睡眠+工作数据才能分析</p>
         </div>
         """, unsafe_allow_html=True)
+
+    # ─── Wishlist / Savings Goals ────────────────────────────────
+    st.markdown('<div class="section-title">购物清单</div>', unsafe_allow_html=True)
+
+    try:
+        _wl_items = wl_load()
+    except Exception:
+        _wl_items = []
+
+    for item in _wl_items:
+        pct = min(item["saved"] / item["target"], 1.0) if item["target"] > 0 else 0
+        pct_text = f"{pct * 100:.0f}%"
+        is_done = pct >= 1.0
+
+        _wl_c1, _wl_c2, _wl_c3 = st.columns([1, 4, 1])
+
+        with _wl_c1:
+            if item.get("image"):
+                st.markdown(
+                    f'<img src="data:image/jpeg;base64,{item["image"]}" '
+                    f'style="width:60px;height:60px;object-fit:cover;border-radius:12px;">',
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    '<div style="width:60px;height:60px;background:#F5F5F7;border-radius:12px;'
+                    'display:flex;align-items:center;justify-content:center;color:#AEAEB2;'
+                    'font-size:1.5rem;">?</div>',
+                    unsafe_allow_html=True,
+                )
+
+        with _wl_c2:
+            _status = " ✓ 已达成" if is_done else ""
+            st.markdown(
+                f'<div style="font-weight:600;font-size:0.9rem;color:#1D1D1F;">{item["name"]}'
+                f'<span style="color:#34C759;font-size:0.75rem;">{_status}</span></div>'
+                f'<div style="font-size:0.75rem;color:#86868B;">¥{item["saved"]:.0f} / ¥{item["target"]:.0f}</div>',
+                unsafe_allow_html=True,
+            )
+            st.progress(pct)
+
+        with _wl_c3:
+            if not is_done:
+                if st.button("+", key=f"wl_add_{item['id']}"):
+                    st.session_state["wl_adding_to"] = item["id"]
+
+        if st.session_state.get("wl_adding_to") == item["id"]:
+            with st.form(key=f"wl_form_{item['id']}"):
+                _amt = st.number_input("存入金额 (¥)", min_value=1, value=100, step=50, key=f"wl_amt_{item['id']}")
+                _sub = st.form_submit_button("确认存入")
+                if _sub:
+                    wl_save(item["id"], _amt)
+                    st.session_state.pop("wl_adding_to", None)
+                    st.rerun()
+
+    with st.expander("添加新目标"):
+        with st.form(key="wl_new_item"):
+            _new_name = st.text_input("名称", placeholder="如: Rick Owens 裤子")
+            _new_img = st.file_uploader("图片（可选）", type=["png", "jpg", "jpeg", "webp"])
+            _new_target = st.number_input("目标金额 (¥)", min_value=1, value=1000, step=100)
+            _new_submit = st.form_submit_button("添加")
+            if _new_submit and _new_name:
+                _img_bytes = _new_img.read() if _new_img else None
+                wl_add(_new_name, _img_bytes, _new_target)
+                st.rerun()
 
 # ─── Footer ──────────────────────────────────────────────────
 st.markdown('<br><p style="color:#D1D1D6; text-align:center; font-size:0.7rem;">Life Manager v0.2 · 界面精修</p>', unsafe_allow_html=True)
