@@ -830,14 +830,18 @@ with _col_main:
             st.progress(pct)
 
         with _wl_c3:
-            if not is_done:
-                st.button("＋存入", key=f"wl_add_{item['id']}", on_click=lambda iid=item['id']: st.session_state.update({"wl_adding_to": iid}))
+            _btn_col1, _btn_col2 = st.columns(2)
+            with _btn_col1:
+                if not is_done:
+                    st.button("＋", key=f"wl_add_{item['id']}", on_click=lambda iid=item['id']: st.session_state.update({"wl_adding_to": iid}))
+            with _btn_col2:
+                st.button("－", key=f"wl_sub_{item['id']}", on_click=lambda iid=item['id']: st.session_state.update({"wl_subbing_from": iid}))
 
         if st.session_state.get("wl_adding_to") == item["id"]:
             with st.form(key=f"wl_form_{item['id']}"):
                 _amt = st.number_input("存入金额 (¥)", min_value=1, value=100, step=50, key=f"wl_amt_{item['id']}")
                 _upd_img = st.file_uploader("更换图片（可选）", type=["png", "jpg", "jpeg", "webp"], key=f"wl_img_{item['id']}")
-                _sub = st.form_submit_button("确认")
+                _sub = st.form_submit_button("确认存入")
                 if _sub:
                     wl_save(item["id"], _amt)
                     if _upd_img:
@@ -845,6 +849,18 @@ with _col_main:
                         wl_update_img(item["id"], _upd_img.read())
                     st.session_state.pop("wl_adding_to", None)
                     st.rerun()
+
+        if st.session_state.get("wl_subbing_from") == item["id"]:
+            with st.form(key=f"wl_sub_form_{item['id']}"):
+                _sub_amt = st.number_input("扣除金额 (¥)", min_value=1, value=100, step=50, key=f"wl_sub_amt_{item['id']}")
+                _sub_btn = st.form_submit_button("确认扣除")
+                if _sub_btn:
+                    wl_save(item["id"], -_sub_amt)
+                    st.session_state.pop("wl_subbing_from", None)
+                    st.rerun()
+
+        st.button("删除该目标", key=f"wl_del_{item['id']}", type="secondary",
+                  on_click=lambda iid=item['id']: [wl_remove(iid), st.session_state.update({"_wl_deleted": iid})])
 
     with st.expander("添加新目标"):
         with st.form(key="wl_new_item"):

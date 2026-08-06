@@ -116,7 +116,7 @@ def add_savings(item_id: str, amount: float) -> dict | None:
     data = _load()
     for item in data.get("items", []):
         if item["id"] == item_id:
-            item["saved"] = item.get("saved", 0) + amount
+            item["saved"] = max(0, item.get("saved", 0) + amount)
             item.setdefault("history", []).append({
                 "date": str(date.today()),
                 "amount": amount,
