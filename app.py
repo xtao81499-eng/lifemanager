@@ -830,12 +830,9 @@ with _col_main:
             st.progress(pct)
 
         with _wl_c3:
-            _btn_col1, _btn_col2 = st.columns(2)
-            with _btn_col1:
-                if not is_done:
-                    st.button("＋", key=f"wl_add_{item['id']}", on_click=lambda iid=item['id']: st.session_state.update({"wl_adding_to": iid}))
-            with _btn_col2:
-                st.button("－", key=f"wl_sub_{item['id']}", on_click=lambda iid=item['id']: st.session_state.update({"wl_subbing_from": iid}))
+            if not is_done:
+                st.button("＋", key=f"wl_add_{item['id']}", on_click=lambda iid=item['id']: st.session_state.update({"wl_adding_to": iid}))
+            st.button("－", key=f"wl_sub_{item['id']}", on_click=lambda iid=item['id']: st.session_state.update({"wl_subbing_from": iid}))
 
         if st.session_state.get("wl_adding_to") == item["id"]:
             with st.form(key=f"wl_form_{item['id']}"):
@@ -859,7 +856,7 @@ with _col_main:
                     st.session_state.pop("wl_subbing_from", None)
                     st.rerun()
 
-        st.button("删除该目标", key=f"wl_del_{item['id']}", type="secondary",
+        st.button("🗑 删除", key=f"wl_del_{item['id']}", type="secondary",
                   on_click=lambda iid=item['id']: [wl_remove(iid), st.session_state.update({"_wl_deleted": iid})])
 
     with st.expander("添加新目标"):
