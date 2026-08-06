@@ -130,3 +130,12 @@ def remove_item(item_id: str) -> None:
     data = _load()
     data["items"] = [i for i in data.get("items", []) if i["id"] != item_id]
     _save(data)
+
+
+def update_image(item_id: str, image_bytes: bytes) -> None:
+    data = _load()
+    for item in data.get("items", []):
+        if item["id"] == item_id:
+            item["image"] = _compress_image(image_bytes)
+            _save(data)
+            return

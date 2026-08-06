@@ -802,7 +802,7 @@ with _col_main:
         pct_text = f"{pct * 100:.0f}%"
         is_done = pct >= 1.0
 
-        _wl_c1, _wl_c2, _wl_c3 = st.columns([1, 4, 1])
+        _wl_c1, _wl_c2, _wl_c3 = st.columns([1, 5, 1.2])
 
         with _wl_c1:
             if item.get("image"):
@@ -824,22 +824,25 @@ with _col_main:
             st.markdown(
                 f'<div style="font-weight:600;font-size:0.9rem;color:#1D1D1F;">{item["name"]}'
                 f'<span style="color:#34C759;font-size:0.75rem;">{_status}</span></div>'
-                f'<div style="font-size:0.75rem;color:#86868B;">¥{item["saved"]:.0f} / ¥{item["target"]:.0f}</div>',
+                f'<div style="font-size:0.75rem;color:#86868B;">¥{item["saved"]:.0f} / ¥{item["target"]:.0f} · {pct_text}</div>',
                 unsafe_allow_html=True,
             )
             st.progress(pct)
 
         with _wl_c3:
             if not is_done:
-                if st.button("+", key=f"wl_add_{item['id']}"):
-                    st.session_state["wl_adding_to"] = item["id"]
+                st.button("＋存入", key=f"wl_add_{item['id']}", on_click=lambda iid=item['id']: st.session_state.update({"wl_adding_to": iid}))
 
         if st.session_state.get("wl_adding_to") == item["id"]:
             with st.form(key=f"wl_form_{item['id']}"):
                 _amt = st.number_input("存入金额 (¥)", min_value=1, value=100, step=50, key=f"wl_amt_{item['id']}")
-                _sub = st.form_submit_button("确认存入")
+                _upd_img = st.file_uploader("更换图片（可选）", type=["png", "jpg", "jpeg", "webp"], key=f"wl_img_{item['id']}")
+                _sub = st.form_submit_button("确认")
                 if _sub:
                     wl_save(item["id"], _amt)
+                    if _upd_img:
+                        from core.wishlist import update_image as wl_update_img
+                        wl_update_img(item["id"], _upd_img.read())
                     st.session_state.pop("wl_adding_to", None)
                     st.rerun()
 
