@@ -81,7 +81,7 @@ def _save(data: dict) -> None:
         pass
 
 
-def _compress_image(image_bytes: bytes, max_width: int = 120) -> str:
+def _compress_image(image_bytes: bytes, max_width: int = 200) -> str:
     img = Image.open(BytesIO(image_bytes))
     if img.mode == "RGBA":
         img = img.convert("RGB")

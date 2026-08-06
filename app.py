@@ -808,12 +808,12 @@ with _col_main:
             if item.get("image"):
                 st.markdown(
                     f'<img src="data:image/jpeg;base64,{item["image"]}" '
-                    f'style="width:60px;height:60px;object-fit:cover;border-radius:12px;">',
+                    f'style="width:100px;height:100px;object-fit:cover;border-radius:14px;">',
                     unsafe_allow_html=True,
                 )
             else:
                 st.markdown(
-                    '<div style="width:60px;height:60px;background:#F5F5F7;border-radius:12px;'
+                    '<div style="width:100px;height:100px;background:#F5F5F7;border-radius:14px;'
                     'display:flex;align-items:center;justify-content:center;color:#AEAEB2;'
                     'font-size:1.5rem;">?</div>',
                     unsafe_allow_html=True,
