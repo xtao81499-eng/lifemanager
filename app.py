@@ -431,7 +431,7 @@ _col_main, _col_habit = st.columns([3, 1], gap="medium")
 with _col_habit:
     st.markdown('<div class="section-title">习惯追踪</div>', unsafe_allow_html=True)
 
-    manual_habits = ["睡前护肤"]
+    manual_habits = ["睡前护肤", "喝水"]
     heatmap_cats = ["运动", "学习", "深度复盘/灵感"]
     heatmap_data = df[df["category"].isin(heatmap_cats)].copy()
     date_range = pd.date_range(start=start_date, end=max(end_date, today), freq="D")
