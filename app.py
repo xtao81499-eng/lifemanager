@@ -20,6 +20,7 @@ from core.data_processing import (
 from core.gdrive import get_reflection_insights
 from core.manual_habits import get_checked_dates, toggle as toggle_habit
 from core.wishlist import load_items as wl_load, add_item as wl_add, add_savings as wl_save, remove_item as wl_remove
+from core.weekly_review import generate_kiss, get_review, save_review, week_key
 
 from pathlib import Path as _Path
 _heatmap_component = components.declare_component(
@@ -728,6 +729,101 @@ with _col_main:
         </html>
         """
         components.html(empty_html, height=140, scrolling=False)
+
+    # ─── Weekly KISS Review ───────────────────────────────────
+    st.markdown('<div class="section-title">周复盘 · KISS</div>', unsafe_allow_html=True)
+
+    _wk = week_key()
+    _existing_review = get_review(_wk)
+
+    if _existing_review:
+        _kiss = _existing_review
+    else:
+        try:
+            from core.manual_habits import _load as _mh_load
+            _habit_raw = _mh_load()
+        except Exception:
+            _habit_raw = {}
+        _kiss = generate_kiss(df, _habit_raw)
+
+    _kiss_colors = {"keep": "#34C759", "improve": "#FF9500", "start": "#0A84FF", "stop": "#FF3B30"}
+    _kiss_labels = {"keep": "Keep 保持", "improve": "Improve 改进", "start": "Start 开始", "stop": "Stop 停止"}
+    _kiss_icons = {"keep": "✓", "improve": "↑", "start": "＋", "stop": "✕"}
+
+    _kiss_html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; }
+        body { background: transparent; }
+        .kiss-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .kiss-card {
+            background: #FFFFFF;
+            border-radius: 14px;
+            padding: 1.2rem;
+            box-shadow: 0 1px 8px rgba(60,60,67,0.05), 0 0 1px rgba(60,60,67,0.10);
+            border-left: 4px solid var(--accent);
+        }
+        .kiss-card-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--accent);
+            margin-bottom: 0.6rem;
+            letter-spacing: 0.02em;
+        }
+        .kiss-item {
+            font-size: 0.78rem;
+            color: #1D1D1F;
+            padding: 0.3rem 0;
+            line-height: 1.45;
+            border-bottom: 1px solid rgba(0,0,0,0.03);
+        }
+        .kiss-item:last-child { border-bottom: none; }
+        .kiss-icon {
+            display: inline-block;
+            width: 16px;
+            font-weight: 600;
+            color: var(--accent);
+        }
+    </style>
+    </head>
+    <body>
+    <div class="kiss-grid">
+    """
+
+    for quadrant in ["keep", "improve", "start", "stop"]:
+        color = _kiss_colors[quadrant]
+        label = _kiss_labels[quadrant]
+        icon = _kiss_icons[quadrant]
+        items_html = ""
+        for item in _kiss.get(quadrant, []):
+            items_html += f'<div class="kiss-item"><span class="kiss-icon">{icon}</span> {item}</div>'
+        _kiss_html += f"""
+        <div class="kiss-card" style="--accent: {color};">
+            <div class="kiss-card-title">{label}</div>
+            {items_html}
+        </div>
+        """
+
+    _kiss_html += """
+    </div>
+    </body>
+    </html>
+    """
+
+    components.html(_kiss_html, height=320, scrolling=False)
+
+    _kr1, _kr2 = st.columns([3, 1])
+    with _kr2:
+        if st.button("保存本周复盘", key="save_kiss"):
+            save_review(_kiss, _wk)
+            st.success("已保存")
 
     # ─── Correlation ───────────────────────────────────────────
     st.markdown('<div class="section-title">睡眠 × 工作效率</div>', unsafe_allow_html=True)
