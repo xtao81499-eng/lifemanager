@@ -21,6 +21,14 @@ from core.gdrive import get_reflection_insights
 from core.manual_habits import get_checked_dates, toggle as toggle_habit
 from core.wishlist import load_items as wl_load, add_item as wl_add, add_savings as wl_save, remove_item as wl_remove
 from core.weekly_review import generate_kiss, get_review, save_review, week_key
+from core.calendar_import import (
+    parse_schedule_screenshot,
+    insert_events_batch,
+    list_calendar_categories,
+    create_calendar_category,
+    DEFAULT_CATEGORIES,
+)
+from core.classification_memory import add_batch_examples
 
 from pathlib import Path as _Path
 _heatmap_component = components.declare_component(
@@ -964,6 +972,186 @@ with _col_main:
             if _new_submit and _new_name:
                 _img_bytes = _new_img.read() if _new_img else None
                 wl_add(_new_name, _img_bytes, _new_target)
+                st.rerun()
+
+    # ─── AI Calendar Batch Import ────────────────────────────────
+    st.markdown('<div class="section-title">AI 日程导入</div>', unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style="background:#F5F5F7;border-radius:12px;padding:1rem;margin-bottom:1rem;">
+        <p style="color:#1D1D1F;font-size:0.8rem;margin:0;">
+        上传备忘录截图，AI 自动解析日程并分类。支持编辑后批量写入 Google Calendar。
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    _ci_col1, _ci_col2 = st.columns([2, 1])
+
+    with _ci_col1:
+        _uploaded_img = st.file_uploader(
+            "上传日程截图",
+            type=["png", "jpg", "jpeg"],
+            help="支持备忘录截图格式：开始时间-结束时间 事件名称 评分",
+        )
+
+    with _ci_col2:
+        _schedule_date = st.date_input(
+            "日程日期",
+            value=date.today(),
+            help="截图中日程对应的日期",
+        )
+
+    if _uploaded_img and st.button("🤖 解析日程", type="primary"):
+        with st.spinner("AI 正在解析截图..."):
+            try:
+                _img_bytes = _uploaded_img.read()
+                _parsed_events = parse_schedule_screenshot(
+                    _img_bytes,
+                    _schedule_date.strftime("%Y-%m-%d")
+                )
+                st.session_state["parsed_events"] = _parsed_events
+                st.success(f"✓ 成功解析 {len(_parsed_events)} 个日程")
+            except Exception as e:
+                st.error(f"解析失败: {str(e)}")
+
+    if "parsed_events" in st.session_state and st.session_state["parsed_events"]:
+        _events = st.session_state["parsed_events"]
+
+        st.markdown("### 📋 预览与编辑")
+
+        # 准备编辑表格数据
+        _edit_data = []
+        for ev in _events:
+            _edit_data.append({
+                "开始时间": ev["start"].split("T")[1][:5],
+                "结束时间": ev["end"].split("T")[1][:5],
+                "事件": ev["event"],
+                "分类": ev["category"],
+                "评分": ev.get("score"),
+                "备注": ev.get("notes", ""),
+            })
+
+        _df_edit = pd.DataFrame(_edit_data)
+
+        # 可编辑表格，分类列为下拉框
+        _edited_df = st.data_editor(
+            _df_edit,
+            column_config={
+                "分类": st.column_config.SelectboxColumn(
+                    "分类",
+                    options=DEFAULT_CATEGORIES,
+                    required=True,
+                ),
+                "评分": st.column_config.NumberColumn(
+                    "评分",
+                    min_value=0,
+                    max_value=10,
+                    step=1,
+                ),
+            },
+            hide_index=True,
+            use_container_width=True,
+        )
+
+        st.markdown("### 📂 日历映射")
+
+        # 获取现有日历
+        try:
+            _cal_cats = list_calendar_categories()
+        except Exception:
+            _cal_cats = {}
+
+        _cal_options = list(_cal_cats.keys()) + ["primary (默认日历)"]
+
+        # 为每个分类选择目标日历
+        _mapping = {}
+        _map_cols = st.columns(3)
+        for idx, cat in enumerate(DEFAULT_CATEGORIES):
+            with _map_cols[idx % 3]:
+                _default_idx = 0
+                if cat in _cal_cats:
+                    _default_idx = _cal_options.index(cat)
+
+                _selected = st.selectbox(
+                    f"{cat} →",
+                    options=_cal_options,
+                    index=_default_idx,
+                    key=f"cal_map_{cat}",
+                )
+
+                if _selected == "primary (默认日历)":
+                    _mapping[cat] = "primary"
+                else:
+                    _mapping[cat] = _cal_cats.get(_selected, "primary")
+
+        # 新建日历分类
+        with st.expander("➕ 创建新日历分类"):
+            with st.form(key="create_calendar_form"):
+                _new_cal_name = st.text_input("日历名称", placeholder="如: 深度学习")
+                _new_cal_color = st.selectbox(
+                    "颜色",
+                    options=list(range(1, 25)),
+                    format_func=lambda x: ["蓝", "绿", "紫", "红", "黄", "橙", "青", "灰"][
+                        (x - 1) % 8
+                    ],
+                )
+                _create_cal_btn = st.form_submit_button("创建")
+                if _create_cal_btn and _new_cal_name:
+                    with st.spinner("正在创建日历..."):
+                        try:
+                            create_calendar_category(_new_cal_name, str(_new_cal_color))
+                            st.success(f"✓ 已创建日历: {_new_cal_name}")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"创建失败: {str(e)}")
+
+        # 写入按钮
+        _write_col1, _write_col2 = st.columns([1, 3])
+        with _write_col1:
+            if st.button("✓ 确认并写入日历", type="primary", use_container_width=True):
+                # 更新事件数据
+                for i, row in _edited_df.iterrows():
+                    _events[i]["event"] = row["事件"]
+                    _events[i]["category"] = row["分类"]
+                    _events[i]["score"] = row["评分"]
+                    _events[i]["notes"] = row["备注"]
+
+                # 写入日历
+                _progress_bar = st.progress(0)
+                _status_text = st.empty()
+
+                try:
+                    success_count = 0
+                    for idx, ev in enumerate(_events):
+                        _progress_bar.progress((idx + 1) / len(_events))
+                        _status_text.text(f"正在写入: {ev['event']}...")
+
+                        # 写入单个事件
+                        insert_events_batch([ev], _mapping)
+                        success_count += 1
+
+                    _progress_bar.empty()
+                    _status_text.empty()
+
+                    # 保存分类修正
+                    _corrections = [
+                        {"event": row["事件"], "category": row["分类"]}
+                        for _, row in _edited_df.iterrows()
+                    ]
+                    add_batch_examples(_corrections)
+
+                    st.success(f"✓ 成功写入 {success_count}/{len(_events)} 个日程，分类经验已保存")
+                    st.session_state.pop("parsed_events", None)
+                    st.rerun()
+
+                except Exception as e:
+                    _progress_bar.empty()
+                    _status_text.empty()
+                    st.error(f"写入失败: {str(e)}")
+
+        with _write_col2:
+            if st.button("✕ 取消", use_container_width=True):
+                st.session_state.pop("parsed_events", None)
                 st.rerun()
 
 # ─── Footer ──────────────────────────────────────────────────
