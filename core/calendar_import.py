@@ -14,10 +14,10 @@ from PIL import Image
 from core.auth import get_calendar_service
 from core.classification_memory import load_examples
 
-# 10 个固定日程分类
+# 11 个固定日程分类
 DEFAULT_CATEGORIES = [
     "睡眠", "工作", "餐饮", "运动", "学习",
-    "社交", "家庭", "娱乐", "拖延", "其他"
+    "社交", "家庭", "娱乐", "拖延", "通勤", "其他"
 ]
 
 
@@ -57,6 +57,7 @@ def _build_gemini_prompt(few_shot_examples: list[dict]) -> str:
 - 家庭：和家人通话、家务、陪伴家人
 - 娱乐：看电影、打游戏、刷视频、休闲活动
 - 拖延：无效时间、发呆、拖延
+- 通勤：上下班/出行途中、乘车、开车、步行去某地
 - 其他：不属于以上任何分类
 
 重要：基于语义理解分类，不要只看关键词。例如"午饭吃汉堡王"属于餐饮，因为核心是吃饭。
