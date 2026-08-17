@@ -90,7 +90,7 @@ def parse_schedule_screenshot(image_bytes: bytes, schedule_date: str) -> list[di
         raise ValueError("未配置 GEMINI_API_KEY，请在 secrets.toml 中添加")
 
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    model = genai.GenerativeModel("gemini-2.0-flash")
 
     # 压缩图片（避免超出 API 限制）
     img = Image.open(BytesIO(image_bytes))
