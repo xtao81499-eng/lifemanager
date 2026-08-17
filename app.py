@@ -343,12 +343,20 @@ def load_data(start_date: date, end_date: date):
 
 
 # ─── Header ──────────────────────────────────────────────────
-st.markdown("""
+header_col, refresh_col = st.columns([8, 1])
+with header_col:
+    st.markdown("""
 <div class="app-header">
     <h1>Life Manager</h1>
     <p>Personal Performance Analytics</p>
 </div>
 """, unsafe_allow_html=True)
+with refresh_col:
+    st.markdown("<div style='padding-top:1.6rem'>", unsafe_allow_html=True)
+    if st.button("↻ 刷新", key="global_refresh"):
+        st.cache_data.clear()
+        st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # ─── Date Controls ───────────────────────────────────────────
 today = date.today()
