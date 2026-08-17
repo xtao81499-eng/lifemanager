@@ -46,41 +46,169 @@ st.set_page_config(
 
 
 # ─── Access Gate（仅公网/云端启用） ──────────────────────────
-def _login_gate() -> None:
-    """密码门：仅当 secrets 里配了 app_password 时生效。
+_LOGIN_BG_SCRIPT = """
+<script>
+(function() {
+  const doc = window.parent.document;
 
-    本地桌面版没有 secrets → 直接放行，不影响使用。
-    云端公网访问 → 必须输入正确密码才能看到数据，挡住陌生人。
-    """
+  // --- background layer ---
+  if (!doc.getElementById('lm-login-bg')) {
+    const s = doc.createElement('style');
+    s.id = 'lm-login-style';
+    s.textContent = `
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+      body.lm-login-mode, .stApp.lm-login-mode {
+        background: #0A0A0F !important;
+        font-family: 'Inter', -apple-system, sans-serif !important;
+      }
+      #lm-login-bg {
+        position: fixed; inset: 0; z-index: 0; pointer-events: none;
+        background:
+          radial-gradient(ellipse 80% 60% at 20% 10%, rgba(10,132,255,0.20) 0%, transparent 60%),
+          radial-gradient(ellipse 60% 50% at 80% 85%, rgba(94,60,220,0.16) 0%, transparent 55%),
+          #0A0A0F;
+        animation: lmBgPulse 8s ease-in-out infinite alternate;
+      }
+      @keyframes lmBgPulse { from{opacity:.8} to{opacity:1} }
+      #lm-login-grid {
+        position: fixed; inset: 0; z-index: 0; pointer-events: none;
+        background-image:
+          linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+        background-size: 48px 48px;
+        -webkit-mask-image: radial-gradient(ellipse 80% 80% at 50% 40%, black 30%, transparent 70%);
+        mask-image: radial-gradient(ellipse 80% 80% at 50% 40%, black 30%, transparent 70%);
+      }
+      #lm-login-card {
+        position: fixed; top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 5; pointer-events: none;
+        width: 360px;
+        padding: 0 0 200px 0;
+        display: flex; flex-direction: column; align-items: center;
+        animation: lmSlideUp 0.5s cubic-bezier(.16,1,.3,1) both;
+      }
+      @keyframes lmSlideUp { from{opacity:0;transform:translate(-50%,-42%)} to{opacity:1;transform:translate(-50%,-50%)} }
+      #lm-login-box {
+        width: 360px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.10);
+        border-radius: 24px;
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        box-shadow: 0 32px 80px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.04);
+        padding: 48px 40px 36px;
+        display: flex; flex-direction: column; align-items: center;
+        pointer-events: none;
+      }
+      .lm-logo-mark {
+        width: 54px; height: 54px;
+        background: linear-gradient(135deg, #0A84FF, #5E3CDC);
+        border-radius: 14px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 22px; color: white;
+        box-shadow: 0 8px 28px rgba(10,132,255,0.4);
+        margin-bottom: 22px;
+      }
+      .lm-h1 {
+        font-size: 1.5rem; font-weight: 600; color: #F5F5F7;
+        letter-spacing: -0.01em; text-align: center; margin-bottom: 6px;
+      }
+      .lm-sub {
+        font-size: 0.78rem; color: rgba(255,255,255,0.3);
+        text-align: center; margin-bottom: 8px;
+      }
+
+      /* overlay the Streamlit widget area */
+      [data-testid="stMainBlockContainer"], [data-testid="stAppViewBlockContainer"],
+      .main .block-container, section[data-testid="stSidebar"] + div .block-container {
+        position: fixed !important; top: 50% !important; left: 50% !important;
+        transform: translate(-50%, 56px) !important;
+        width: 280px !important; max-width: 280px !important;
+        padding: 0 !important; z-index: 10 !important;
+      }
+      [data-testid="stTextInput"] input {
+        background: rgba(255,255,255,0.07) !important;
+        border: 1px solid rgba(255,255,255,0.12) !important;
+        border-radius: 12px !important;
+        color: #F5F5F7 !important;
+        font-size: 0.9rem !important;
+        font-family: 'Inter', sans-serif !important;
+        caret-color: #0A84FF !important;
+        padding: 13px 16px !important;
+      }
+      [data-testid="stTextInput"] input:focus {
+        border-color: rgba(10,132,255,0.6) !important;
+        box-shadow: 0 0 0 3px rgba(10,132,255,0.15) !important;
+        outline: none !important;
+      }
+      [data-testid="stTextInput"] input::placeholder { color: rgba(255,255,255,0.25) !important; }
+      [data-testid="stTextInput"] label { display: none !important; }
+      [data-testid="stAlert"] {
+        background: rgba(255,59,48,0.12) !important;
+        border: 1px solid rgba(255,59,48,0.25) !important;
+        border-radius: 10px !important; color: #FF6B6B !important;
+        font-size: 0.78rem !important; margin-top: 8px !important;
+      }
+      [data-testid="stToolbar"], header, footer,
+      [data-testid="stSidebar"], #MainMenu,
+      [data-testid="stDecoration"] { display: none !important; }
+      .stApp { background: #0A0A0F !important; }
+    `;
+    doc.head.appendChild(s);
+
+    const bg = doc.createElement('div'); bg.id = 'lm-login-bg';
+    const grid = doc.createElement('div'); grid.id = 'lm-login-grid';
+    const card = doc.createElement('div'); card.id = 'lm-login-card';
+    card.innerHTML = `
+      <div id="lm-login-box">
+        <div class="lm-logo-mark">◈</div>
+        <div class="lm-h1">Life Manager</div>
+        <div class="lm-sub">Personal Life OS</div>
+      </div>
+    `;
+    doc.body.appendChild(bg);
+    doc.body.appendChild(grid);
+    doc.body.appendChild(card);
+
+    // focus the password input after Streamlit renders it
+    setTimeout(() => {
+      const inp = doc.querySelector('[data-testid="stTextInput"] input');
+      if (inp) inp.focus();
+    }, 400);
+  }
+})();
+</script>
+"""
+
+
+def _login_gate() -> None:
+    """密码门：仅当 secrets 里配了 app_password 时生效。"""
     try:
         password = st.secrets.get("app_password")
     except Exception:
         password = None
     if not password:
-        return  # 未配置密码（本地）→ 放行
+        return
 
     if st.session_state.get("_authed"):
         return
 
-    st.markdown(
-        "<div style='max-width:360px;margin:15vh auto 0;text-align:center;'>"
-        "<h1 style='font-weight:600;'>Life Manager</h1>"
-        "<p style='color:#86868B;'>请输入访问密码</p></div>",
-        unsafe_allow_html=True,
-    )
-    with st.container():
-        _, mid, _ = st.columns([1, 1.4, 1])
-        with mid:
-            entered = st.text_input(
-                "密码", type="password", label_visibility="collapsed",
-                placeholder="密码",
-            )
-            if entered:
-                if entered == password:
-                    st.session_state["_authed"] = True
-                    st.rerun()
-                else:
-                    st.error("密码错误")
+    # inject styled background into parent document via iframe script
+    components.html(_LOGIN_BG_SCRIPT, height=0)
+
+    _, mid, _ = st.columns([1, 1, 1])
+    with mid:
+        entered = st.text_input(
+            "密码", type="password", label_visibility="collapsed",
+            placeholder="输入访问密码，按 Enter 确认",
+        )
+        if entered:
+            if entered == password:
+                st.session_state["_authed"] = True
+                st.rerun()
+            else:
+                st.error("密码错误")
     st.stop()
 
 
