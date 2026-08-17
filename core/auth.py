@@ -125,17 +125,22 @@ def _creds_from_streamlit_secrets():
     except Exception:
         return None
 
-    creds = Credentials(
-        token=tok.get("token"),
-        refresh_token=tok["refresh_token"],
-        token_uri=tok.get("token_uri", "https://oauth2.googleapis.com/token"),
-        client_id=tok["client_id"],
-        client_secret=tok["client_secret"],
-        scopes=SCOPES,
-    )
-    if not creds.valid:
-        creds.refresh(Request())
-    return creds
+    try:
+        creds = Credentials(
+            token=tok.get("token"),
+            refresh_token=tok["refresh_token"],
+            token_uri=tok.get("token_uri", "https://oauth2.googleapis.com/token"),
+            client_id=tok["client_id"],
+            client_secret=tok["client_secret"],
+            scopes=SCOPES,
+        )
+        if not creds.valid:
+            creds.refresh(Request())
+        return creds
+    except Exception as e:
+        raise RuntimeError(
+            f"Streamlit Secrets 中的 gcp_token 无效或已过期，请重新授权并更新 Secrets。\n原始错误: {e}"
+        ) from e
 
 
 def _get_credentials_with_source():
