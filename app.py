@@ -1048,7 +1048,7 @@ with _col_main:
                     "评分",
                     min_value=0,
                     max_value=10,
-                    step=1,
+                    step=0.1,
                 ),
             },
             hide_index=True,

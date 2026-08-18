@@ -43,7 +43,7 @@ def _build_gemini_prompt(few_shot_examples: list[dict]) -> str:
 - start_time: 开始时间（HH:MM 格式）
 - end_time: 结束时间（HH:MM 格式）
 - event: 事件名称
-- score: 评分（整数，无评分则为 null）
+- score: 评分（数字，支持小数如 7.5，无评分则为 null）
 - notes: 备注信息（缩进内容，无备注则为空字符串）
 - category: 从以下分类中选择最合适的一个：{', '.join(DEFAULT_CATEGORIES)}
 
