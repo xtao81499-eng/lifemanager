@@ -167,18 +167,18 @@ def insert_events_batch(events: list[dict], calendar_mapping: dict[str, str]) ->
         category = event.get("category", "其他")
         calendar_id = calendar_mapping.get(category, "primary")
 
+        # 构建标题（加入评分）
+        summary = event["event"]
+        if event.get("score") is not None:
+            summary = f"{summary} {event['score']}/10"
+
         # 构建事件体
         body = {
-            "summary": event["event"],
+            "summary": summary,
             "description": event.get("notes", ""),
             "start": {"dateTime": event["start"], "timeZone": "Asia/Shanghai"},
             "end": {"dateTime": event["end"], "timeZone": "Asia/Shanghai"},
         }
-
-        # 添加评分到描述
-        if event.get("score") is not None:
-            score_line = f"\n\n评分: {event['score']}/10"
-            body["description"] = (body["description"] + score_line).strip()
 
         try:
             service.events().insert(calendarId=calendar_id, body=body).execute()
