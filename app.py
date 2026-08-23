@@ -330,6 +330,14 @@ PLOT_LAYOUT = dict(
 
 
 # ─── Data Loading ────────────────────────────────────────────
+@st.cache_data(ttl=600)
+def load_insights():
+    try:
+        return get_reflection_insights()
+    except Exception:
+        return {"title": "", "date": "", "suggestions": [], "is_today": False}
+
+
 @st.cache_data(ttl=300)
 def load_data(start_date: date, end_date: date):
     days_back = (date.today() - start_date).days + 1
@@ -598,14 +606,7 @@ with _col_main:
     # ─── Reflection Insights ──────────────────────────────────
     st.markdown('<div class="section-title">反思洞察</div>', unsafe_allow_html=True)
 
-    @st.cache_data(ttl=600)
-    def _load_insights():
-        try:
-            return get_reflection_insights()
-        except Exception:
-            return {"title": "", "date": "", "suggestions": [], "is_today": False}
-
-    insights = _load_insights()
+    insights = load_insights()
 
     if insights["suggestions"]:
         items_html = ""
