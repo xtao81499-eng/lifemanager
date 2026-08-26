@@ -983,7 +983,7 @@ with _col_main:
     st.markdown("""
     <div style="background:#F5F5F7;border-radius:12px;padding:1rem;margin-bottom:1rem;">
         <p style="color:#1D1D1F;font-size:0.8rem;margin:0;">
-        上传备忘录截图，AI 自动解析日程并分类。支持编辑后批量写入 Google Calendar。
+        上传备忘录截图，AI 自动解析日程并分类。支持一次上传多日截图，按日期顺序排列后批量写入 Google Calendar。
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -991,31 +991,47 @@ with _col_main:
     _ci_col1, _ci_col2 = st.columns([2, 1])
 
     with _ci_col1:
-        _uploaded_img = st.file_uploader(
+        _uploaded_imgs = st.file_uploader(
             "上传日程截图",
             type=["png", "jpg", "jpeg"],
-            help="支持备忘录截图格式：开始时间-结束时间 事件名称 评分",
+            accept_multiple_files=True,
+            help="可同时上传多日截图，文件顺序对应日期顺序（起始日期依次 +1 天）",
         )
 
     with _ci_col2:
         _schedule_date = st.date_input(
-            "日程日期",
+            "起始日期",
             value=date.today(),
-            help="截图中日程对应的日期",
+            help="第一张截图对应的日期，后续截图依次 +1 天",
         )
 
-    if _uploaded_img and st.button("🤖 解析日程", type="primary"):
-        with st.spinner("AI 正在解析截图..."):
-            try:
-                _img_bytes = _uploaded_img.read()
-                _parsed_events = parse_schedule_screenshot(
-                    _img_bytes,
-                    _schedule_date.strftime("%Y-%m-%d")
-                )
-                st.session_state["parsed_events"] = _parsed_events
-                st.success(f"✓ 成功解析 {len(_parsed_events)} 个日程")
-            except Exception as e:
-                st.error(f"解析失败: {str(e)}")
+    if _uploaded_imgs and st.button("🤖 解析日程", type="primary"):
+        _all_parsed: list[dict] = []
+        _parse_errors: list[str] = []
+        _prog = st.progress(0, text="准备解析...")
+        try:
+            for _i, _img_file in enumerate(_uploaded_imgs):
+                _day_date = (_schedule_date + timedelta(days=_i)).strftime("%Y-%m-%d")
+                _prog.progress((_i) / len(_uploaded_imgs), text=f"解析第 {_i+1}/{len(_uploaded_imgs)} 张（{_day_date}）...")
+                try:
+                    _parsed = parse_schedule_screenshot(_img_file.read(), _day_date)
+                    _all_parsed.extend(_parsed)
+                except Exception as _e:
+                    _parse_errors.append(f"{_img_file.name}（{_day_date}）: {_e}")
+            _prog.empty()
+            if _all_parsed:
+                st.session_state["parsed_events"] = _all_parsed
+                _msg = f"✓ 成功解析 {len(_all_parsed)} 个日程（共 {len(_uploaded_imgs)} 张截图）"
+                if _parse_errors:
+                    _msg += f"，{len(_parse_errors)} 张失败"
+                st.success(_msg)
+                for _err in _parse_errors:
+                    st.warning(f"解析失败: {_err}")
+            else:
+                st.error("所有截图解析失败")
+        except Exception as e:
+            _prog.empty()
+            st.error(f"解析失败: {str(e)}")
 
     if "parsed_events" in st.session_state and st.session_state["parsed_events"]:
         _events = st.session_state["parsed_events"]
@@ -1026,6 +1042,7 @@ with _col_main:
         _edit_data = []
         for ev in _events:
             _edit_data.append({
+                "日期": ev["start"].split("T")[0],
                 "开始时间": ev["start"].split("T")[1][:5],
                 "结束时间": ev["end"].split("T")[1][:5],
                 "事件": ev["event"],
@@ -1040,6 +1057,7 @@ with _col_main:
         _edited_df = st.data_editor(
             _df_edit,
             column_config={
+                "日期": st.column_config.TextColumn("日期", disabled=True),
                 "分类": st.column_config.SelectboxColumn(
                     "分类",
                     options=DEFAULT_CATEGORIES,
