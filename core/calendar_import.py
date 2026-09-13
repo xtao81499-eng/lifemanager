@@ -151,9 +151,51 @@ def _normalize_datetime(base_date: datetime, time_str: str) -> datetime:
     return base_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
 
+def _delete_overlapping_events(service, start_time: str, end_time: str, all_calendar_ids: list[str]) -> int:
+    """
+    删除所有日历中与指定时间段重叠的事件。
+
+    Args:
+        service: Google Calendar API service 对象
+        start_time: ISO 格式开始时间
+        end_time: ISO 格式结束时间
+        all_calendar_ids: 所有要检查的日历 ID 列表
+
+    Returns:
+        删除的事件数量
+    """
+    deleted_count = 0
+
+    for cal_id in all_calendar_ids:
+        try:
+            # 查询该时间段内的所有事件
+            events_result = service.events().list(
+                calendarId=cal_id,
+                timeMin=start_time,
+                timeMax=end_time,
+                singleEvents=True,
+            ).execute()
+
+            events = events_result.get("items", [])
+
+            # 删除找到的所有事件
+            for evt in events:
+                try:
+                    service.events().delete(calendarId=cal_id, eventId=evt["id"]).execute()
+                    deleted_count += 1
+                except Exception as e:
+                    print(f"删除事件失败: {evt.get('summary', '未知')} - {e}")
+
+        except Exception as e:
+            print(f"查询日历 {cal_id} 失败: {e}")
+            continue
+
+    return deleted_count
+
+
 def insert_events_batch(events: list[dict], calendar_mapping: dict[str, str]) -> int:
     """
-    批量写入事件到 Google Calendar。
+    批量写入事件到 Google Calendar，写入前删除时间重叠的旧事件。
 
     Args:
         events: 事件列表（parse_schedule_screenshot 返回格式）
@@ -165,9 +207,17 @@ def insert_events_batch(events: list[dict], calendar_mapping: dict[str, str]) ->
     service = get_calendar_service()
     success_count = 0
 
+    # 获取所有日历 ID（用于删除重叠事件）
+    from core.calendar_sync import list_calendars
+    all_calendars = list_calendars()
+    all_calendar_ids = [cal["id"] for cal in all_calendars]
+
     for event in events:
         category = event.get("category", "其他")
         calendar_id = calendar_mapping.get(category, "primary")
+
+        # 先删除该时间段内所有日历中的重叠事件
+        _delete_overlapping_events(service, event["start"], event["end"], all_calendar_ids)
 
         # 构建标题（加入评分）
         summary = event["event"]
