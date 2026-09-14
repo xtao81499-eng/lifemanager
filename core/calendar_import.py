@@ -181,13 +181,22 @@ def _delete_overlapping_events(service, start_time: str, end_time: str, all_cale
             # 删除找到的所有事件
             for evt in events:
                 try:
-                    service.events().delete(calendarId=cal_id, eventId=evt["id"]).execute()
-                    deleted_count += 1
+                    # 检查事件是否可删除（有些日历只读或事件被锁定）
+                    if evt.get("id") and cal_id:
+                        service.events().delete(calendarId=cal_id, eventId=evt["id"]).execute()
+                        deleted_count += 1
+                        print(f"✓ 已删除重叠事件: {evt.get('summary', '未知')} ({start_time[:10]})")
                 except Exception as e:
-                    print(f"删除事件失败: {evt.get('summary', '未知')} - {e}")
+                    # 忽略只读日历或权限不足的错误
+                    error_msg = str(e)
+                    if "403" not in error_msg and "404" not in error_msg:
+                        print(f"删除事件失败: {evt.get('summary', '未知')} - {e}")
 
         except Exception as e:
-            print(f"查询日历 {cal_id} 失败: {e}")
+            # 忽略只读日历的查询错误
+            error_msg = str(e)
+            if "403" not in error_msg and "404" not in error_msg:
+                print(f"查询日历 {cal_id} 失败: {e}")
             continue
 
     return deleted_count
