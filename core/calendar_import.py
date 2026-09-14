@@ -157,35 +157,56 @@ def _delete_overlapping_events(service, start_time: str, end_time: str, all_cale
 
     Args:
         service: Google Calendar API service 对象
-        start_time: ISO 格式开始时间
+        start_time: ISO 格式开始时间 (例如 "2026-08-30T09:00:00+08:00")
         end_time: ISO 格式结束时间
         all_calendar_ids: 所有要检查的日历 ID 列表
 
     Returns:
         删除的事件数量
     """
+    from datetime import datetime, timedelta
+
     deleted_count = 0
+
+    # 解析时间，扩大查询范围（前后各1小时）以确保捕获所有重叠事件
+    start_dt = datetime.fromisoformat(start_time.replace('+08:00', ''))
+    end_dt = datetime.fromisoformat(end_time.replace('+08:00', ''))
+
+    query_start = (start_dt - timedelta(hours=1)).isoformat() + '+08:00'
+    query_end = (end_dt + timedelta(hours=1)).isoformat() + '+08:00'
 
     for cal_id in all_calendar_ids:
         try:
-            # 查询该时间段内的所有事件
+            # 查询更大范围内的事件，然后手动判断是否重叠
             events_result = service.events().list(
                 calendarId=cal_id,
-                timeMin=start_time,
-                timeMax=end_time,
+                timeMin=query_start,
+                timeMax=query_end,
                 singleEvents=True,
             ).execute()
 
             events = events_result.get("items", [])
 
-            # 删除找到的所有事件
+            # 检查每个事件是否与目标时间段重叠
             for evt in events:
                 try:
-                    # 检查事件是否可删除（有些日历只读或事件被锁定）
-                    if evt.get("id") and cal_id:
-                        service.events().delete(calendarId=cal_id, eventId=evt["id"]).execute()
-                        deleted_count += 1
-                        print(f"✓ 已删除重叠事件: {evt.get('summary', '未知')} ({start_time[:10]})")
+                    evt_start = evt.get("start", {}).get("dateTime")
+                    evt_end = evt.get("end", {}).get("dateTime")
+
+                    if not evt_start or not evt_end:
+                        continue
+
+                    # 解析事件时间
+                    evt_start_dt = datetime.fromisoformat(evt_start.replace('+08:00', ''))
+                    evt_end_dt = datetime.fromisoformat(evt_end.replace('+08:00', ''))
+
+                    # 判断是否重叠：事件结束时间 > 目标开始时间 且 事件开始时间 < 目标结束时间
+                    if evt_end_dt > start_dt and evt_start_dt < end_dt:
+                        if evt.get("id") and cal_id:
+                            service.events().delete(calendarId=cal_id, eventId=evt["id"]).execute()
+                            deleted_count += 1
+                            print(f"✓ 已删除重叠事件: {evt.get('summary', '未知')} ({evt_start[:16]} - {evt_end[11:16]})")
+
                 except Exception as e:
                     # 忽略只读日历或权限不足的错误
                     error_msg = str(e)
