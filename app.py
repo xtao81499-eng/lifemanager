@@ -1007,32 +1007,34 @@ with _col_main:
         )
 
     if _uploaded_imgs and st.button("🤖 解析日程", type="primary"):
-        _all_parsed: list[dict] = []
-        _parse_errors: list[str] = []
-        _prog = st.progress(0, text="准备解析...")
-        try:
-            for _i, _img_file in enumerate(_uploaded_imgs):
-                _day_date = (_schedule_date + timedelta(days=_i)).strftime("%Y-%m-%d")
-                _prog.progress((_i) / len(_uploaded_imgs), text=f"解析第 {_i+1}/{len(_uploaded_imgs)} 张（{_day_date}）...")
-                try:
-                    _parsed = parse_schedule_screenshot(_img_file.read(), _day_date)
-                    _all_parsed.extend(_parsed)
-                except Exception as _e:
-                    _parse_errors.append(f"{_img_file.name}（{_day_date}）: {_e}")
-            _prog.empty()
-            if _all_parsed:
-                st.session_state["parsed_events"] = _all_parsed
-                _msg = f"✓ 成功解析 {len(_all_parsed)} 个日程（共 {len(_uploaded_imgs)} 张截图）"
-                if _parse_errors:
-                    _msg += f"，{len(_parse_errors)} 张失败"
-                st.success(_msg)
-                for _err in _parse_errors:
-                    st.warning(f"解析失败: {_err}")
-            else:
-                st.error("所有截图解析失败")
-        except Exception as e:
-            _prog.empty()
-            st.error(f"解析失败: {str(e)}")
+        with st.spinner("正在解析截图..."):
+            _all_parsed: list[dict] = []
+            _parse_errors: list[str] = []
+            _prog = st.progress(0, text="准备解析...")
+            try:
+                for _i, _img_file in enumerate(_uploaded_imgs):
+                    _day_date = (_schedule_date + timedelta(days=_i)).strftime("%Y-%m-%d")
+                    _prog.progress((_i) / len(_uploaded_imgs), text=f"解析第 {_i+1}/{len(_uploaded_imgs)} 张（{_day_date}）...")
+                    try:
+                        _parsed = parse_schedule_screenshot(_img_file.read(), _day_date)
+                        _all_parsed.extend(_parsed)
+                    except Exception as _e:
+                        _parse_errors.append(f"{_img_file.name}（{_day_date}）: {_e}")
+                _prog.empty()
+                if _all_parsed:
+                    st.session_state["parsed_events"] = _all_parsed
+                    _msg = f"✓ 成功解析 {len(_all_parsed)} 个日程（共 {len(_uploaded_imgs)} 张截图）"
+                    if _parse_errors:
+                        _msg += f"，{len(_parse_errors)} 张失败"
+                    st.success(_msg)
+                    for _err in _parse_errors:
+                        st.warning(f"解析失败: {_err}")
+                    st.rerun()
+                else:
+                    st.error("所有截图解析失败")
+            except Exception as e:
+                _prog.empty()
+                st.error(f"解析失败: {str(e)}")
 
     if "parsed_events" in st.session_state and st.session_state["parsed_events"]:
         _events = st.session_state["parsed_events"]
