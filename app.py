@@ -80,18 +80,6 @@ def _login_gate() -> None:
 
 _login_gate()
 
-# ─── Version Display (top-right) ─────────────────────────────
-import subprocess
-try:
-    _commit_hash = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'], cwd=str(_Path(__file__).parent)).decode('utf-8').strip()
-except:
-    _commit_hash = "unknown"
-
-st.markdown(
-    f'<div style="position:fixed;top:1rem;right:1rem;z-index:9999;background:rgba(255,255,255,0.9);backdrop-filter:blur(10px);padding:0.4rem 0.8rem;border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,0.08);font-size:0.7rem;color:#86868B;">v{_commit_hash}</div>',
-    unsafe_allow_html=True
-)
-
 # ─── iOS "Add to Home Screen" (PWA) meta tags ────────────────
 # Streamlit owns <head>, so inject from a component into the parent document.
 _ICON_URL = "./app/static/apple-touch-icon.png"
@@ -364,7 +352,14 @@ def load_data(start_date: date, end_date: date):
 
 
 # ─── Header ──────────────────────────────────────────────────
-header_col, refresh_col = st.columns([8, 1])
+# Get version hash safely after Streamlit initialization
+import subprocess
+try:
+    _commit_hash = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'], cwd=str(_Path(__file__).parent)).decode('utf-8').strip()
+except:
+    _commit_hash = "unknown"
+
+header_col, refresh_col, version_col = st.columns([7, 1, 1])
 with header_col:
     st.markdown("""
 <div class="app-header">
@@ -378,6 +373,8 @@ with refresh_col:
         st.cache_data.clear()
         st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
+with version_col:
+    st.markdown(f"<div style='padding-top:2.2rem;text-align:right;font-size:0.7rem;color:#AEAEB2;'>v{_commit_hash}</div>", unsafe_allow_html=True)
 
 # ─── Date Controls ───────────────────────────────────────────
 today = date.today()
