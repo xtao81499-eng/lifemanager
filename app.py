@@ -1151,26 +1151,26 @@ with _col_main:
 
                 # 写入日历
                 _progress_bar = st.progress(0)
-                _log_container = st.container()
+                _log_area = st.empty()
 
-                # 日志回调函数
+                # 日志收集器（避免在回调中直接调用 st 组件）
                 _log_messages = []
                 def _log_callback(msg):
                     _log_messages.append(msg)
-                    with _log_container:
-                        st.text("\n".join(_log_messages[-20:]))  # 只显示最近20条
 
                 try:
-                    success_count = 0
                     for idx, ev in enumerate(_events):
                         _progress_bar.progress((idx + 1) / len(_events))
                         _log_callback(f"\n📝 [{idx+1}/{len(_events)}] {ev['event']}")
 
-                        # 写入单个事件（传入日志回调）
+                        # 写入单个事件
                         insert_events_batch([ev], _mapping, log_callback=_log_callback)
-                        success_count += 1
+
+                        # 实时显示日志（在主线程）
+                        _log_area.text("\n".join(_log_messages[-30:]))
 
                     _progress_bar.empty()
+                    _log_area.empty()
 
                     # 保存分类修正
                     _corrections = [
@@ -1179,13 +1179,20 @@ with _col_main:
                     ]
                     add_batch_examples(_corrections)
 
-                    st.success(f"✓ 成功写入 {success_count}/{len(_events)} 个日程，分类经验已保存")
+                    st.success(f"✓ 成功写入 {len(_events)} 个日程，分类经验已保存")
+
+                    # 显示完整日志
+                    with st.expander("📋 查看详细日志"):
+                        st.code("\n".join(_log_messages), language="text")
+
                     st.session_state.pop("parsed_events", None)
-                    st.rerun()
 
                 except Exception as e:
                     _progress_bar.empty()
+                    _log_area.empty()
                     st.error(f"写入失败: {str(e)}")
+                    with st.expander("📋 查看日志"):
+                        st.code("\n".join(_log_messages), language="text")
 
         with _write_col2:
             if st.button("✕ 取消", use_container_width=True):
