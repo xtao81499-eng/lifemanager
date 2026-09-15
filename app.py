@@ -80,6 +80,18 @@ def _login_gate() -> None:
 
 _login_gate()
 
+# ─── Version Display (top-right) ─────────────────────────────
+import subprocess
+try:
+    _commit_hash = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'], cwd=str(_Path(__file__).parent)).decode('utf-8').strip()
+except:
+    _commit_hash = "unknown"
+
+st.markdown(
+    f'<div style="position:fixed;top:1rem;right:1rem;z-index:9999;background:rgba(255,255,255,0.9);backdrop-filter:blur(10px);padding:0.4rem 0.8rem;border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,0.08);font-size:0.7rem;color:#86868B;">v{_commit_hash}</div>',
+    unsafe_allow_html=True
+)
+
 # ─── iOS "Add to Home Screen" (PWA) meta tags ────────────────
 # Streamlit owns <head>, so inject from a component into the parent document.
 _ICON_URL = "./app/static/apple-touch-icon.png"
@@ -1179,10 +1191,4 @@ with _col_main:
                 st.rerun()
 
 # ─── Footer ──────────────────────────────────────────────────
-import subprocess
-try:
-    _commit_hash = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'], cwd=str(_Path(__file__).parent)).decode('utf-8').strip()
-except:
-    _commit_hash = "unknown"
-
-st.markdown(f'<br><p style="color:#D1D1D6; text-align:center; font-size:0.7rem;">Life Manager · 版本 {_commit_hash}</p>', unsafe_allow_html=True)
+st.markdown('<br><p style="color:#D1D1D6; text-align:center; font-size:0.7rem;">Life Manager · 界面精修</p>', unsafe_allow_html=True)
