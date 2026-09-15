@@ -2,7 +2,7 @@
 AI 日程批量导入模块
 
 通过 Gemini Vision API 解析备忘录截图，提取结构化日程数据，
-支持用户编辑后批量写入 Google Calendar。
+支持用户编辑后批量写入 Google Calendar，并自动删除重叠事件。
 """
 import re
 from datetime import datetime, timedelta
