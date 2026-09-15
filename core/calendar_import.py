@@ -219,6 +219,9 @@ def _delete_overlapping_events(service, start_time: str, end_time: str, all_cale
                 print(f"查询日历 {cal_id} 失败: {e}")
             continue
 
+    # 打印收集到的事件数量
+    print(f"📋 发现 {len(events_to_delete)} 个重叠事件待删除")
+
     # 第二步：逐个删除，确保每个都尝试删除（即使前面的失败了）
     for cal_id, event_id, summary, time_range in events_to_delete:
         try:
@@ -232,6 +235,7 @@ def _delete_overlapping_events(service, start_time: str, end_time: str, all_cale
                 print(f"✗ 删除事件失败: {summary} - {e}")
             # 继续删除下一个，不中断
 
+    print(f"🗑️ 删除完成: 成功删除 {deleted_count}/{len(events_to_delete)} 个事件")
     return deleted_count
 
 

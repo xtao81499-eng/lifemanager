@@ -1179,4 +1179,10 @@ with _col_main:
                 st.rerun()
 
 # ─── Footer ──────────────────────────────────────────────────
-st.markdown('<br><p style="color:#D1D1D6; text-align:center; font-size:0.7rem;">Life Manager v0.2 · 界面精修</p>', unsafe_allow_html=True)
+import subprocess
+try:
+    _commit_hash = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'], cwd=str(_Path(__file__).parent)).decode('utf-8').strip()
+except:
+    _commit_hash = "unknown"
+
+st.markdown(f'<br><p style="color:#D1D1D6; text-align:center; font-size:0.7rem;">Life Manager · 版本 {_commit_hash}</p>', unsafe_allow_html=True)
