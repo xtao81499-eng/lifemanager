@@ -1142,12 +1142,19 @@ with _col_main:
         _write_col1, _write_col2 = st.columns([1, 3])
         with _write_col1:
             if st.button("✓ 确认并写入日历", type="primary", use_container_width=True):
-                # 更新事件数据
+                # 更新事件数据（包括时间字段）
                 for i, row in _edited_df.iterrows():
                     _events[i]["event"] = row["事件"]
                     _events[i]["category"] = row["分类"]
                     _events[i]["score"] = row["评分"]
                     _events[i]["notes"] = row["备注"]
+
+                    # 重新构建 ISO 时间字符串（用户可能编辑了时间）
+                    date_str = row["日期"]
+                    start_time = row["开始时间"]
+                    end_time = row["结束时间"]
+                    _events[i]["start"] = f"{date_str}T{start_time}:00"
+                    _events[i]["end"] = f"{date_str}T{end_time}:00"
 
                 # 写入日历
                 _progress_bar = st.progress(0)
