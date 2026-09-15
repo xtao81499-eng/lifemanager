@@ -151,7 +151,7 @@ def _normalize_datetime(base_date: datetime, time_str: str) -> datetime:
     return base_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
 
-def _delete_overlapping_events(service, start_time: str, end_time: str, all_calendar_ids: list[str]) -> int:
+def _delete_overlapping_events(service, start_time: str, end_time: str, all_calendar_ids: list[str], log_callback=None) -> int:
     """
     删除所有日历中与指定时间段重叠的事件。
 
@@ -160,11 +160,18 @@ def _delete_overlapping_events(service, start_time: str, end_time: str, all_cale
         start_time: ISO 格式开始时间 (例如 "2026-08-30T09:00:00+08:00")
         end_time: ISO 格式结束时间
         all_calendar_ids: 所有要检查的日历 ID 列表
+        log_callback: 可选的日志回调函数，用于输出日志到 UI
 
     Returns:
         删除的事件数量
     """
     from datetime import datetime, timedelta
+
+    def log(msg):
+        if log_callback:
+            log_callback(msg)
+        else:
+            print(msg)
 
     deleted_count = 0
 
@@ -216,42 +223,53 @@ def _delete_overlapping_events(service, start_time: str, end_time: str, all_cale
             # 忽略只读日历的查询错误
             error_msg = str(e)
             if "403" not in error_msg and "404" not in error_msg:
-                print(f"查询日历 {cal_id} 失败: {e}")
+                log(f"⚠️ 查询日历失败 (跳过): {error_msg[:50]}")
             continue
 
     # 打印收集到的事件数量
-    print(f"📋 发现 {len(events_to_delete)} 个重叠事件待删除")
+    if events_to_delete:
+        log(f"📋 发现 {len(events_to_delete)} 个重叠事件待删除")
+    else:
+        log("✓ 该时间段无重叠事件")
 
     # 第二步：逐个删除，确保每个都尝试删除（即使前面的失败了）
     for cal_id, event_id, summary, time_range in events_to_delete:
         try:
             service.events().delete(calendarId=cal_id, eventId=event_id).execute()
             deleted_count += 1
-            print(f"✓ 已删除重叠事件: {summary} ({time_range})")
+            log(f"✓ 已删除: {summary} ({time_range})")
         except Exception as e:
             error_msg = str(e)
             # 只记录非权限问题的错误
             if "403" not in error_msg and "404" not in error_msg and "410" not in error_msg:
-                print(f"✗ 删除事件失败: {summary} - {e}")
+                log(f"✗ 删除失败: {summary} - {error_msg[:50]}")
             # 继续删除下一个，不中断
 
-    print(f"🗑️ 删除完成: 成功删除 {deleted_count}/{len(events_to_delete)} 个事件")
+    if events_to_delete:
+        log(f"🗑️ 删除完成: 成功 {deleted_count}/{len(events_to_delete)} 个")
     return deleted_count
 
 
-def insert_events_batch(events: list[dict], calendar_mapping: dict[str, str]) -> int:
+def insert_events_batch(events: list[dict], calendar_mapping: dict[str, str], log_callback=None) -> int:
     """
     批量写入事件到 Google Calendar，写入前删除时间重叠的旧事件。
 
     Args:
         events: 事件列表（parse_schedule_screenshot 返回格式）
         calendar_mapping: 分类到日历 ID 的映射 {"睡眠": "cal_id_1", ...}
+        log_callback: 可选的日志回调函数，用于输出日志到 UI
 
     Returns:
         成功写入的事件数量
     """
     service = get_calendar_service()
     success_count = 0
+
+    def log(msg):
+        if log_callback:
+            log_callback(msg)
+        else:
+            print(msg)
 
     # 获取所有日历 ID（用于删除重叠事件）
     from core.calendar_sync import list_calendars
@@ -263,7 +281,8 @@ def insert_events_batch(events: list[dict], calendar_mapping: dict[str, str]) ->
         calendar_id = calendar_mapping.get(category, "primary")
 
         # 先删除该时间段内所有日历中的重叠事件
-        _delete_overlapping_events(service, event["start"], event["end"], all_calendar_ids)
+        log(f"\n🔍 检查重叠: {event['event']} ({event['start'][11:16]} - {event['end'][11:16]})")
+        _delete_overlapping_events(service, event["start"], event["end"], all_calendar_ids, log_callback)
 
         # 构建标题（加入评分）
         summary = event["event"]
@@ -281,8 +300,9 @@ def insert_events_batch(events: list[dict], calendar_mapping: dict[str, str]) ->
         try:
             service.events().insert(calendarId=calendar_id, body=body).execute()
             success_count += 1
+            log(f"✅ 已写入: {event['event']}")
         except Exception as e:
-            print(f"写入事件失败: {event['event']} - {e}")
+            log(f"❌ 写入失败: {event['event']} - {str(e)[:50]}")
             continue
 
     return success_count

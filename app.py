@@ -1151,20 +1151,26 @@ with _col_main:
 
                 # 写入日历
                 _progress_bar = st.progress(0)
-                _status_text = st.empty()
+                _log_container = st.container()
+
+                # 日志回调函数
+                _log_messages = []
+                def _log_callback(msg):
+                    _log_messages.append(msg)
+                    with _log_container:
+                        st.text("\n".join(_log_messages[-20:]))  # 只显示最近20条
 
                 try:
                     success_count = 0
                     for idx, ev in enumerate(_events):
                         _progress_bar.progress((idx + 1) / len(_events))
-                        _status_text.text(f"正在写入: {ev['event']}...")
+                        _log_callback(f"\n📝 [{idx+1}/{len(_events)}] {ev['event']}")
 
-                        # 写入单个事件
-                        insert_events_batch([ev], _mapping)
+                        # 写入单个事件（传入日志回调）
+                        insert_events_batch([ev], _mapping, log_callback=_log_callback)
                         success_count += 1
 
                     _progress_bar.empty()
-                    _status_text.empty()
 
                     # 保存分类修正
                     _corrections = [
@@ -1179,7 +1185,6 @@ with _col_main:
 
                 except Exception as e:
                     _progress_bar.empty()
-                    _status_text.empty()
                     st.error(f"写入失败: {str(e)}")
 
         with _write_col2:
