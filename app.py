@@ -1028,7 +1028,9 @@ with _col_main:
                         _parsed = parse_schedule_screenshot(_img_file.read(), _day_date)
                         _all_parsed.extend(_parsed)
                     except Exception as _e:
-                        _parse_errors.append(f"{_img_file.name}（{_day_date}）: {_e}")
+                        import traceback
+                        _full_error = f"{_img_file.name}（{_day_date}）:\n{type(_e).__name__}: {str(_e)}\n{traceback.format_exc()}"
+                        _parse_errors.append(_full_error)
                 _prog.empty()
                 if _all_parsed:
                     st.session_state["parsed_events"] = _all_parsed
@@ -1037,13 +1039,19 @@ with _col_main:
                         _msg += f"，{len(_parse_errors)} 张失败"
                     st.success(_msg)
                     for _err in _parse_errors:
-                        st.warning(f"解析失败: {_err}")
+                        with st.expander("❌ 查看详细错误", expanded=True):
+                            st.code(_err, language="text")
                     st.rerun()
                 else:
                     st.error("所有截图解析失败")
+                    for _err in _parse_errors:
+                        with st.expander("❌ 查看详细错误", expanded=True):
+                            st.code(_err, language="text")
             except Exception as e:
                 _prog.empty()
-                st.error(f"解析失败: {str(e)}")
+                import traceback
+                st.error(f"解析失败: {type(e).__name__}: {str(e)}")
+                st.code(traceback.format_exc(), language="text")
 
     if "parsed_events" in st.session_state and st.session_state["parsed_events"]:
         _events = st.session_state["parsed_events"]
