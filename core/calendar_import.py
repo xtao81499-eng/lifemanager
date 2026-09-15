@@ -175,9 +175,12 @@ def _delete_overlapping_events(service, start_time: str, end_time: str, all_cale
     query_start = (start_dt - timedelta(hours=1)).isoformat() + '+08:00'
     query_end = (end_dt + timedelta(hours=1)).isoformat() + '+08:00'
 
+    # 第一步：收集所有要删除的事件
+    events_to_delete = []  # [(cal_id, event_id, summary, time_range), ...]
+
     for cal_id in all_calendar_ids:
         try:
-            # 查询更大范围内的事件，然后手动判断是否重叠
+            # 查询更大范围内的事件
             events_result = service.events().list(
                 calendarId=cal_id,
                 timeMin=query_start,
@@ -189,29 +192,25 @@ def _delete_overlapping_events(service, start_time: str, end_time: str, all_cale
 
             # 检查每个事件是否与目标时间段重叠
             for evt in events:
-                try:
-                    evt_start = evt.get("start", {}).get("dateTime")
-                    evt_end = evt.get("end", {}).get("dateTime")
+                evt_start = evt.get("start", {}).get("dateTime")
+                evt_end = evt.get("end", {}).get("dateTime")
 
-                    if not evt_start or not evt_end:
-                        continue
+                if not evt_start or not evt_end:
+                    continue
 
-                    # 解析事件时间
-                    evt_start_dt = datetime.fromisoformat(evt_start.replace('+08:00', ''))
-                    evt_end_dt = datetime.fromisoformat(evt_end.replace('+08:00', ''))
+                # 解析事件时间
+                evt_start_dt = datetime.fromisoformat(evt_start.replace('+08:00', ''))
+                evt_end_dt = datetime.fromisoformat(evt_end.replace('+08:00', ''))
 
-                    # 判断是否重叠：事件结束时间 > 目标开始时间 且 事件开始时间 < 目标结束时间
-                    if evt_end_dt > start_dt and evt_start_dt < end_dt:
-                        if evt.get("id") and cal_id:
-                            service.events().delete(calendarId=cal_id, eventId=evt["id"]).execute()
-                            deleted_count += 1
-                            print(f"✓ 已删除重叠事件: {evt.get('summary', '未知')} ({evt_start[:16]} - {evt_end[11:16]})")
-
-                except Exception as e:
-                    # 忽略只读日历或权限不足的错误
-                    error_msg = str(e)
-                    if "403" not in error_msg and "404" not in error_msg:
-                        print(f"删除事件失败: {evt.get('summary', '未知')} - {e}")
+                # 判断是否重叠
+                if evt_end_dt > start_dt and evt_start_dt < end_dt:
+                    if evt.get("id") and cal_id:
+                        events_to_delete.append((
+                            cal_id,
+                            evt["id"],
+                            evt.get("summary", "未知"),
+                            f"{evt_start[:16]} - {evt_end[11:16]}"
+                        ))
 
         except Exception as e:
             # 忽略只读日历的查询错误
@@ -219,6 +218,19 @@ def _delete_overlapping_events(service, start_time: str, end_time: str, all_cale
             if "403" not in error_msg and "404" not in error_msg:
                 print(f"查询日历 {cal_id} 失败: {e}")
             continue
+
+    # 第二步：逐个删除，确保每个都尝试删除（即使前面的失败了）
+    for cal_id, event_id, summary, time_range in events_to_delete:
+        try:
+            service.events().delete(calendarId=cal_id, eventId=event_id).execute()
+            deleted_count += 1
+            print(f"✓ 已删除重叠事件: {summary} ({time_range})")
+        except Exception as e:
+            error_msg = str(e)
+            # 只记录非权限问题的错误
+            if "403" not in error_msg and "404" not in error_msg and "410" not in error_msg:
+                print(f"✗ 删除事件失败: {summary} - {e}")
+            # 继续删除下一个，不中断
 
     return deleted_count
 
