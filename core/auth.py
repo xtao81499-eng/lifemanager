@@ -51,7 +51,7 @@ _RETRY = Retry(
     total=4,
     backoff_factor=0.8,
     status_forcelist=(500, 502, 503, 504),
-    allowed_methods=frozenset(["GET", "POST"]),
+    allowed_methods=frozenset(["GET", "POST", "PUT", "PATCH", "DELETE"]),
 )
 
 

@@ -325,50 +325,53 @@ def _normalize_datetime(base_date: datetime, time_str: str) -> datetime:
 
 
 def _parse_event_datetime(value: str) -> datetime:
-    """Parse Google Calendar dateTime, stripping a trailing Asia/Shanghai offset if present."""
-    return datetime.fromisoformat(value.replace("+08:00", "").replace("Z", ""))
+    """Normalize Google dateTime to naive Asia/Shanghai wall clock for day-window compares."""
+    from datetime import timezone
+
+    raw = value.replace("Z", "+00:00")
+    dt = datetime.fromisoformat(raw)
+    if dt.tzinfo is None:
+        return dt
+    shanghai = timezone(timedelta(hours=8))
+    return dt.astimezone(shanghai).replace(tzinfo=None)
 
 
-def _delete_timed_events_for_day(
-    service,
-    day_date: str,
-    all_calendar_ids: list[str],
-    log_callback=None,
-) -> int:
-    """
-    整日替换的删除阶段：删除所有日历中与当天 [00:00, 次日 00:00) 时间重叠的带钟点事件。
+def _writable_calendar_ids(calendars: list[dict], extra_ids: list[str] | None = None) -> list[str]:
+    """Prefer owner/writer calendars; always include explicit write targets."""
+    ids: list[str] = []
+    seen: set[str] = set()
+    for cal in calendars:
+        cal_id = cal.get("id")
+        role = cal.get("accessRole", "")
+        if not cal_id or cal_id in seen:
+            continue
+        if role in ("owner", "writer"):
+            ids.append(cal_id)
+            seen.add(cal_id)
+    for cal_id in extra_ids or []:
+        if cal_id and cal_id not in seen:
+            ids.append(cal_id)
+            seen.add(cal_id)
+    if not ids:
+        for cal in calendars:
+            cal_id = cal.get("id")
+            if cal_id and cal_id not in seen:
+                ids.append(cal_id)
+                seen.add(cal_id)
+    return ids
 
-    - 跳过全天事件（只有 start.date / end.date，无 dateTime）
-    - 跨天旧事件：整条删除
-    - 重复事件：list 使用 singleEvents=True，删除展开后的实例 ID = 只取消当天这一次
-    - 若解析未产出任何日程，调用方不应调用本函数（不清空）
 
-    Args:
-        service: Google Calendar API service
-        day_date: YYYY-MM-DD（按 Asia/Shanghai 当天视图理解）
-        all_calendar_ids: 要扫描的日历 ID 列表
-        log_callback: 可选日志回调
-
-    Returns:
-        成功删除的事件数量
-    """
-    def log(msg):
-        if log_callback:
-            log_callback(msg)
-        else:
-            print(msg)
-
+def _list_timed_events_overlapping_day(service, cal_id: str, day_date: str, log_callback=None):
+    """List timed events overlapping [day 00:00, next day 00:00), with retries."""
     day_start = datetime.strptime(day_date, "%Y-%m-%d")
     day_end = day_start + timedelta(days=1)
-    # Google Calendar API 要求 RFC3339；与写入时区一致
     query_start = day_start.strftime("%Y-%m-%dT00:00:00+08:00")
     query_end = day_end.strftime("%Y-%m-%dT00:00:00+08:00")
 
-    events_to_delete = []  # [(cal_id, event_id, summary, time_range), ...]
-    seen_ids: set[tuple[str, str]] = set()
-
-    for cal_id in all_calendar_ids:
+    last_error = None
+    for attempt in range(1, 4):
         try:
+            collected = []
             page_token = None
             while True:
                 events_result = service.events().list(
@@ -377,83 +380,166 @@ def _delete_timed_events_for_day(
                     timeMax=query_end,
                     singleEvents=True,
                     orderBy="startTime",
+                    maxResults=2500,
                     pageToken=page_token,
                 ).execute()
 
                 for evt in events_result.get("items", []):
                     evt_start = evt.get("start", {}).get("dateTime")
                     evt_end = evt.get("end", {}).get("dateTime")
-
-                    # 全天事件：保留不删
                     if not evt_start or not evt_end:
                         continue
-
                     evt_start_dt = _parse_event_datetime(evt_start)
                     evt_end_dt = _parse_event_datetime(evt_end)
-
-                    # 与当天窗口有任何时间重叠则整条删除
                     if evt_end_dt > day_start and evt_start_dt < day_end:
-                        event_id = evt.get("id")
-                        if not event_id or not cal_id:
-                            continue
-                        key = (cal_id, event_id)
-                        if key in seen_ids:
-                            continue
-                        seen_ids.add(key)
-                        events_to_delete.append((
-                            cal_id,
-                            event_id,
-                            evt.get("summary", "未知"),
-                            f"{evt_start[:16]} - {evt_end[11:16]}",
-                        ))
+                        collected.append(evt)
 
                 page_token = events_result.get("nextPageToken")
                 if not page_token:
                     break
-
+            return collected
         except Exception as e:
-            error_msg = str(e)
-            if "403" not in error_msg and "404" not in error_msg:
-                log(f"⚠️ 查询日历失败 (跳过): {error_msg[:50]}")
-            continue
+            last_error = e
+            if attempt < 3:
+                import time
+                time.sleep(0.6 * attempt)
+                continue
+            raise last_error
 
-    if events_to_delete:
-        log(f"📋 {day_date} 发现 {len(events_to_delete)} 个带时间事件待删除（整日替换）")
+
+def _delete_timed_events_for_day(
+    service,
+    day_date: str,
+    all_calendar_ids: list[str],
+    log_callback=None,
+    max_passes: int = 5,
+) -> int:
+    """
+    整日替换的删除阶段：对可写日历反复清扫，直到当天无带时间事件为止。
+
+    - 跳过全天事件
+    - 跨天旧事件：整条删除
+    - 重复事件：singleEvents=True 后删实例 = 只取消当天这一次
+    - 查询失败会重试；全部失败则拒绝继续写入，避免叠加重复
+    - 多轮清扫：解决「同一时段已有很多重复事件时只删掉一部分」的问题
+    """
+    def log(msg):
+        if log_callback:
+            log_callback(msg)
+        else:
+            print(msg)
+
+    total_deleted = 0
+    hard_failures: list[str] = []
+
+    for pass_no in range(1, max_passes + 1):
+        events_to_delete = []
+        seen_ids: set[tuple[str, str]] = set()
+        query_ok = 0
+        query_fail = 0
+
+        for cal_id in all_calendar_ids:
+            try:
+                items = _list_timed_events_overlapping_day(
+                    service, cal_id, day_date, log_callback
+                )
+                query_ok += 1
+                for evt in items:
+                    event_id = evt.get("id")
+                    if not event_id:
+                        continue
+                    key = (cal_id, event_id)
+                    if key in seen_ids:
+                        continue
+                    seen_ids.add(key)
+                    evt_start = evt["start"]["dateTime"]
+                    evt_end = evt["end"]["dateTime"]
+                    events_to_delete.append((
+                        cal_id,
+                        event_id,
+                        evt.get("summary", "未知"),
+                        f"{evt_start[:16]} - {evt_end[11:16]}",
+                    ))
+            except Exception as e:
+                query_fail += 1
+                err = f"{cal_id}: {type(e).__name__}: {str(e)[:120]}"
+                hard_failures.append(err)
+                log(f"⚠️ 查询日历失败 (重试后仍失败): {err}")
+
+        if not events_to_delete:
+            if pass_no == 1:
+                if query_fail and not query_ok:
+                    raise RuntimeError(
+                        f"{day_date} 所有日历查询均失败，拒绝写入以免叠加重复。"
+                        f" 错误示例: {hard_failures[:3]}"
+                    )
+                log(f"✓ {day_date} 当天无带时间旧事件（查询成功 {query_ok} 个日历）")
+            else:
+                log(f"✓ {day_date} 第 {pass_no} 轮清扫后已无残留")
+            break
+
+        log(
+            f"📋 {day_date} 第 {pass_no}/{max_passes} 轮："
+            f"发现 {len(events_to_delete)} 个待删"
+            f"（查询成功 {query_ok}，失败 {query_fail}）"
+        )
+
+        deleted_this_pass = 0
+        for cal_id, event_id, summary, time_range in events_to_delete:
+            deleted_ok = False
+            last_err = None
+            for attempt in range(1, 4):
+                try:
+                    service.events().delete(
+                        calendarId=cal_id, eventId=event_id
+                    ).execute()
+                    deleted_ok = True
+                    break
+                except Exception as e:
+                    last_err = e
+                    msg = str(e)
+                    if "404" in msg or "410" in msg:
+                        deleted_ok = True
+                        break
+                    if attempt < 3:
+                        import time
+                        time.sleep(0.4 * attempt)
+            if deleted_ok:
+                deleted_this_pass += 1
+                total_deleted += 1
+                log(f"✓ 已删除: {summary} ({time_range})")
+            else:
+                log(f"✗ 删除失败: {summary} - {str(last_err)[:80]}")
+
+        log(f"🗑️ {day_date} 第 {pass_no} 轮删除: {deleted_this_pass}/{len(events_to_delete)}")
+
+        if deleted_this_pass == 0:
+            log(f"⚠️ {day_date} 本轮未能删除任何事件，停止清扫")
+            break
     else:
-        log(f"✓ {day_date} 当天无带时间旧事件")
+        leftover = 0
+        for cal_id in all_calendar_ids:
+            try:
+                leftover += len(
+                    _list_timed_events_overlapping_day(service, cal_id, day_date)
+                )
+            except Exception:
+                continue
+        if leftover:
+            raise RuntimeError(
+                f"{day_date} 清扫 {max_passes} 轮后仍剩 {leftover} 个带时间事件，"
+                "中止写入以免继续叠加重复。"
+            )
 
-    deleted_count = 0
-    for cal_id, event_id, summary, time_range in events_to_delete:
-        try:
-            service.events().delete(calendarId=cal_id, eventId=event_id).execute()
-            deleted_count += 1
-            log(f"✓ 已删除: {summary} ({time_range})")
-        except Exception as e:
-            error_msg = str(e)
-            if "403" not in error_msg and "404" not in error_msg and "410" not in error_msg:
-                log(f"✗ 删除失败: {summary} - {error_msg[:50]}")
-
-    if events_to_delete:
-        log(f"🗑️ {day_date} 删除完成: 成功 {deleted_count}/{len(events_to_delete)} 个")
-    return deleted_count
+    return total_deleted
 
 
 def insert_events_batch(events: list[dict], calendar_mapping: dict[str, str], log_callback=None) -> int:
     """
     按天整日替换后批量写入 Google Calendar。
 
-    对每个出现在 events 中的日期：先清空绑定账号下各日历当天的带时间事件，
-    再写入该日的新日程。某日若没有任何事件（例如解析失败未纳入列表），则跳过、不清空。
-    同一天多批事件若合并进本列表，以列表内容为准（后解析的图应覆盖前图时，
-    由调用方保证只保留最后一张图的结果）。
-
-    Args:
-        events: 事件列表（parse_schedule_screenshot 返回格式）
-        calendar_mapping: 分类到日历 ID 的映射 {"睡眠": "cal_id_1", ...}
-        log_callback: 可选的日志回调函数，用于输出日志到 UI
-
-    Returns:
-        成功写入的事件数量
+    对每个出现在 events 中的日期：先清空可写日历当天的带时间事件，
+    再写入该日的新日程。某日若没有任何事件则跳过、不清空。
     """
     service = get_calendar_service()
     success_count = 0
@@ -470,9 +556,12 @@ def insert_events_batch(events: list[dict], calendar_mapping: dict[str, str], lo
 
     from core.calendar_sync import list_calendars
     all_calendars = list_calendars()
-    all_calendar_ids = [cal["id"] for cal in all_calendars]
+    target_ids = _writable_calendar_ids(
+        all_calendars,
+        extra_ids=list(calendar_mapping.values()),
+    )
+    log(f"🗂️ 整日替换扫描 {len(target_ids)} 个可写日历（共 {len(all_calendars)} 个可见）")
 
-    # 按日期分组；保持首次出现的日期顺序
     events_by_day: dict[str, list[dict]] = defaultdict(list)
     day_order: list[str] = []
     for event in events:
@@ -487,7 +576,7 @@ def insert_events_batch(events: list[dict], calendar_mapping: dict[str, str], lo
             continue
 
         log(f"\n📅 整日替换: {day}（{len(day_events)} 条新日程）")
-        _delete_timed_events_for_day(service, day, all_calendar_ids, log_callback)
+        _delete_timed_events_for_day(service, day, target_ids, log_callback)
 
         for event in day_events:
             category = event.get("category", "其他")
