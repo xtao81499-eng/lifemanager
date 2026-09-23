@@ -315,13 +315,46 @@ def parse_schedule_screenshot(image_bytes: bytes, schedule_date: str) -> list[di
 
 def _normalize_datetime(base_date: datetime, time_str: str) -> datetime:
     """将时间字符串（HH:MM）转换为 datetime，处理 24:00 特殊情况。"""
-    hour, minute = map(int, time_str.split(":"))
+    hour, minute = map(int, str(time_str).strip().split(":"))
 
     if hour == 24:
         # 24:00 = 次日 00:00
         return base_date + timedelta(days=1, hours=0, minutes=minute)
 
     return base_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+
+def build_event_datetimes(date_str: str, start_time: str, end_time: str) -> tuple[str, str]:
+    """
+    Build ISO start/end from table fields.
+
+    Handles day-end 24:00 / 00:00: if end is on-or-before start on the same
+    calendar date (e.g. 23:30–00:00), end rolls to the next day.
+    """
+    base_date = datetime.strptime(str(date_str).strip(), "%Y-%m-%d")
+    start_dt = _normalize_datetime(base_date, start_time)
+    end_dt = _normalize_datetime(base_date, end_time)
+    if end_dt <= start_dt:
+        end_dt += timedelta(days=1)
+    return start_dt.strftime("%Y-%m-%dT%H:%M:%S"), end_dt.strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def normalize_event_times(event: dict) -> dict:
+    """Ensure event['end'] is strictly after event['start'] (overnight-safe)."""
+    start_raw = event["start"]
+    end_raw = event["end"]
+    # Allow either full ISO or date+time already split via rebuild
+    start_dt = datetime.fromisoformat(start_raw.replace("Z", ""))
+    end_dt = datetime.fromisoformat(end_raw.replace("Z", ""))
+    if end_dt.tzinfo or start_dt.tzinfo:
+        start_dt = _parse_event_datetime(start_raw)
+        end_dt = _parse_event_datetime(end_raw)
+    if end_dt <= start_dt:
+        end_dt = end_dt + timedelta(days=1)
+    event = dict(event)
+    event["start"] = start_dt.strftime("%Y-%m-%dT%H:%M:%S")
+    event["end"] = end_dt.strftime("%Y-%m-%dT%H:%M:%S")
+    return event
 
 
 def _parse_event_datetime(value: str) -> datetime:
@@ -598,6 +631,7 @@ def insert_events_batch(events: list[dict], calendar_mapping: dict[str, str], lo
         log(f"✓ {day} 清扫核验通过，开始写入 {len(day_events)} 条")
 
         for event in day_events:
+            event = normalize_event_times(event)
             category = event.get("category", "其他")
             calendar_id = calendar_mapping.get(category, "primary")
 
@@ -617,7 +651,7 @@ def insert_events_batch(events: list[dict], calendar_mapping: dict[str, str], lo
                 success_count += 1
                 log(f"✅ 已写入: {event['event']} ({event['start'][11:16]}-{event['end'][11:16]})")
             except Exception as e:
-                log(f"❌ 写入失败: {event['event']} - {str(e)[:50]}")
+                log(f"❌ 写入失败: {event['event']} - {str(e)[:80]}")
                 continue
 
     return success_count

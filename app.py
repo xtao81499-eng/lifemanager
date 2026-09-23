@@ -26,6 +26,7 @@ from core.calendar_import import (
     insert_events_batch,
     list_calendar_categories,
     create_calendar_category,
+    build_event_datetimes,
     DEFAULT_CATEGORIES,
 )
 from core.classification_memory import add_batch_examples
@@ -1177,12 +1178,13 @@ with _col_main:
                     _events[i]["score"] = row["评分"]
                     _events[i]["notes"] = row["备注"]
 
-                    # 重新构建 ISO 时间字符串（用户可能编辑了时间）
+                    # 重新构建 ISO 时间（00:00/24:00 跨午夜会滚到次日）
                     date_str = row["日期"]
-                    start_time = row["开始时间"]
-                    end_time = row["结束时间"]
-                    _events[i]["start"] = f"{date_str}T{start_time}:00"
-                    _events[i]["end"] = f"{date_str}T{end_time}:00"
+                    start_time = str(row["开始时间"])
+                    end_time = str(row["结束时间"])
+                    _events[i]["start"], _events[i]["end"] = build_event_datetimes(
+                        date_str, start_time, end_time
+                    )
 
                 _days_in_batch = sorted({ev["start"].split("T")[0] for ev in _events})
                 _progress_bar = st.progress(0, text="准备整日替换...")
