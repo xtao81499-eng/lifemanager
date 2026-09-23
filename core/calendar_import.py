@@ -2,9 +2,13 @@
 AI 日程批量导入模块
 
 通过 Gemini Vision API 解析备忘录截图，提取结构化日程数据，
-支持用户编辑后批量写入 Google Calendar，并自动删除重叠事件。
+支持用户编辑后批量写入 Google Calendar。
+
+写入策略：按天整日替换——对每个成功解析出日程的日期，先删除绑定日历中
+当天所有带起止时间的事件，再写入新日程。解析失败或当天无日程则跳过、不清空。
 """
 import re
+from collections import defaultdict
 from datetime import datetime, timedelta
 from io import BytesIO
 
@@ -151,88 +155,105 @@ def _normalize_datetime(base_date: datetime, time_str: str) -> datetime:
     return base_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
 
-def _delete_overlapping_events(service, start_time: str, end_time: str, all_calendar_ids: list[str], log_callback=None) -> int:
+def _parse_event_datetime(value: str) -> datetime:
+    """Parse Google Calendar dateTime, stripping a trailing Asia/Shanghai offset if present."""
+    return datetime.fromisoformat(value.replace("+08:00", "").replace("Z", ""))
+
+
+def _delete_timed_events_for_day(
+    service,
+    day_date: str,
+    all_calendar_ids: list[str],
+    log_callback=None,
+) -> int:
     """
-    删除所有日历中与指定时间段重叠的事件。
+    整日替换的删除阶段：删除所有日历中与当天 [00:00, 次日 00:00) 时间重叠的带钟点事件。
+
+    - 跳过全天事件（只有 start.date / end.date，无 dateTime）
+    - 跨天旧事件：整条删除
+    - 重复事件：list 使用 singleEvents=True，删除展开后的实例 ID = 只取消当天这一次
+    - 若解析未产出任何日程，调用方不应调用本函数（不清空）
 
     Args:
-        service: Google Calendar API service 对象
-        start_time: ISO 格式开始时间 (例如 "2026-08-30T09:00:00+08:00")
-        end_time: ISO 格式结束时间
-        all_calendar_ids: 所有要检查的日历 ID 列表
-        log_callback: 可选的日志回调函数，用于输出日志到 UI
+        service: Google Calendar API service
+        day_date: YYYY-MM-DD（按 Asia/Shanghai 当天视图理解）
+        all_calendar_ids: 要扫描的日历 ID 列表
+        log_callback: 可选日志回调
 
     Returns:
-        删除的事件数量
+        成功删除的事件数量
     """
-    from datetime import datetime, timedelta
-
     def log(msg):
         if log_callback:
             log_callback(msg)
         else:
             print(msg)
 
-    deleted_count = 0
+    day_start = datetime.strptime(day_date, "%Y-%m-%d")
+    day_end = day_start + timedelta(days=1)
+    # Google Calendar API 要求 RFC3339；与写入时区一致
+    query_start = day_start.strftime("%Y-%m-%dT00:00:00+08:00")
+    query_end = day_end.strftime("%Y-%m-%dT00:00:00+08:00")
 
-    # 解析时间，扩大查询范围（前后各1小时）以确保捕获所有重叠事件
-    start_dt = datetime.fromisoformat(start_time.replace('+08:00', ''))
-    end_dt = datetime.fromisoformat(end_time.replace('+08:00', ''))
-
-    query_start = (start_dt - timedelta(hours=1)).isoformat() + '+08:00'
-    query_end = (end_dt + timedelta(hours=1)).isoformat() + '+08:00'
-
-    # 第一步：收集所有要删除的事件
     events_to_delete = []  # [(cal_id, event_id, summary, time_range), ...]
+    seen_ids: set[tuple[str, str]] = set()
 
     for cal_id in all_calendar_ids:
         try:
-            # 查询更大范围内的事件
-            events_result = service.events().list(
-                calendarId=cal_id,
-                timeMin=query_start,
-                timeMax=query_end,
-                singleEvents=True,
-            ).execute()
+            page_token = None
+            while True:
+                events_result = service.events().list(
+                    calendarId=cal_id,
+                    timeMin=query_start,
+                    timeMax=query_end,
+                    singleEvents=True,
+                    orderBy="startTime",
+                    pageToken=page_token,
+                ).execute()
 
-            events = events_result.get("items", [])
+                for evt in events_result.get("items", []):
+                    evt_start = evt.get("start", {}).get("dateTime")
+                    evt_end = evt.get("end", {}).get("dateTime")
 
-            # 检查每个事件是否与目标时间段重叠
-            for evt in events:
-                evt_start = evt.get("start", {}).get("dateTime")
-                evt_end = evt.get("end", {}).get("dateTime")
+                    # 全天事件：保留不删
+                    if not evt_start or not evt_end:
+                        continue
 
-                if not evt_start or not evt_end:
-                    continue
+                    evt_start_dt = _parse_event_datetime(evt_start)
+                    evt_end_dt = _parse_event_datetime(evt_end)
 
-                # 解析事件时间
-                evt_start_dt = datetime.fromisoformat(evt_start.replace('+08:00', ''))
-                evt_end_dt = datetime.fromisoformat(evt_end.replace('+08:00', ''))
-
-                # 判断是否重叠
-                if evt_end_dt > start_dt and evt_start_dt < end_dt:
-                    if evt.get("id") and cal_id:
+                    # 与当天窗口有任何时间重叠则整条删除
+                    if evt_end_dt > day_start and evt_start_dt < day_end:
+                        event_id = evt.get("id")
+                        if not event_id or not cal_id:
+                            continue
+                        key = (cal_id, event_id)
+                        if key in seen_ids:
+                            continue
+                        seen_ids.add(key)
                         events_to_delete.append((
                             cal_id,
-                            evt["id"],
+                            event_id,
                             evt.get("summary", "未知"),
-                            f"{evt_start[:16]} - {evt_end[11:16]}"
+                            f"{evt_start[:16]} - {evt_end[11:16]}",
                         ))
 
+                page_token = events_result.get("nextPageToken")
+                if not page_token:
+                    break
+
         except Exception as e:
-            # 忽略只读日历的查询错误
             error_msg = str(e)
             if "403" not in error_msg and "404" not in error_msg:
                 log(f"⚠️ 查询日历失败 (跳过): {error_msg[:50]}")
             continue
 
-    # 打印收集到的事件数量
     if events_to_delete:
-        log(f"📋 发现 {len(events_to_delete)} 个重叠事件待删除")
+        log(f"📋 {day_date} 发现 {len(events_to_delete)} 个带时间事件待删除（整日替换）")
     else:
-        log("✓ 该时间段无重叠事件")
+        log(f"✓ {day_date} 当天无带时间旧事件")
 
-    # 第二步：逐个删除，确保每个都尝试删除（即使前面的失败了）
+    deleted_count = 0
     for cal_id, event_id, summary, time_range in events_to_delete:
         try:
             service.events().delete(calendarId=cal_id, eventId=event_id).execute()
@@ -240,19 +261,22 @@ def _delete_overlapping_events(service, start_time: str, end_time: str, all_cale
             log(f"✓ 已删除: {summary} ({time_range})")
         except Exception as e:
             error_msg = str(e)
-            # 只记录非权限问题的错误
             if "403" not in error_msg and "404" not in error_msg and "410" not in error_msg:
                 log(f"✗ 删除失败: {summary} - {error_msg[:50]}")
-            # 继续删除下一个，不中断
 
     if events_to_delete:
-        log(f"🗑️ 删除完成: 成功 {deleted_count}/{len(events_to_delete)} 个")
+        log(f"🗑️ {day_date} 删除完成: 成功 {deleted_count}/{len(events_to_delete)} 个")
     return deleted_count
 
 
 def insert_events_batch(events: list[dict], calendar_mapping: dict[str, str], log_callback=None) -> int:
     """
-    批量写入事件到 Google Calendar，写入前删除时间重叠的旧事件。
+    按天整日替换后批量写入 Google Calendar。
+
+    对每个出现在 events 中的日期：先清空绑定账号下各日历当天的带时间事件，
+    再写入该日的新日程。某日若没有任何事件（例如解析失败未纳入列表），则跳过、不清空。
+    同一天多批事件若合并进本列表，以列表内容为准（后解析的图应覆盖前图时，
+    由调用方保证只保留最后一张图的结果）。
 
     Args:
         events: 事件列表（parse_schedule_screenshot 返回格式）
@@ -271,39 +295,53 @@ def insert_events_batch(events: list[dict], calendar_mapping: dict[str, str], lo
         else:
             print(msg)
 
-    # 获取所有日历 ID（用于删除重叠事件）
+    if not events:
+        log("✓ 无日程可写入，跳过（不清空任何日期）")
+        return 0
+
     from core.calendar_sync import list_calendars
     all_calendars = list_calendars()
     all_calendar_ids = [cal["id"] for cal in all_calendars]
 
+    # 按日期分组；保持首次出现的日期顺序
+    events_by_day: dict[str, list[dict]] = defaultdict(list)
+    day_order: list[str] = []
     for event in events:
-        category = event.get("category", "其他")
-        calendar_id = calendar_mapping.get(category, "primary")
+        day = event["start"].split("T")[0]
+        if day not in events_by_day:
+            day_order.append(day)
+        events_by_day[day].append(event)
 
-        # 先删除该时间段内所有日历中的重叠事件
-        log(f"\n🔍 检查重叠: {event['event']} ({event['start'][11:16]} - {event['end'][11:16]})")
-        _delete_overlapping_events(service, event["start"], event["end"], all_calendar_ids, log_callback)
-
-        # 构建标题（加入评分）
-        summary = event["event"]
-        if event.get("score") is not None:
-            summary = f"{summary} {event['score']}/10"
-
-        # 构建事件体
-        body = {
-            "summary": summary,
-            "description": event.get("notes", ""),
-            "start": {"dateTime": event["start"], "timeZone": "Asia/Shanghai"},
-            "end": {"dateTime": event["end"], "timeZone": "Asia/Shanghai"},
-        }
-
-        try:
-            service.events().insert(calendarId=calendar_id, body=body).execute()
-            success_count += 1
-            log(f"✅ 已写入: {event['event']}")
-        except Exception as e:
-            log(f"❌ 写入失败: {event['event']} - {str(e)[:50]}")
+    for day in day_order:
+        day_events = events_by_day[day]
+        if not day_events:
             continue
+
+        log(f"\n📅 整日替换: {day}（{len(day_events)} 条新日程）")
+        _delete_timed_events_for_day(service, day, all_calendar_ids, log_callback)
+
+        for event in day_events:
+            category = event.get("category", "其他")
+            calendar_id = calendar_mapping.get(category, "primary")
+
+            summary = event["event"]
+            if event.get("score") is not None:
+                summary = f"{summary} {event['score']}/10"
+
+            body = {
+                "summary": summary,
+                "description": event.get("notes", ""),
+                "start": {"dateTime": event["start"], "timeZone": "Asia/Shanghai"},
+                "end": {"dateTime": event["end"], "timeZone": "Asia/Shanghai"},
+            }
+
+            try:
+                service.events().insert(calendarId=calendar_id, body=body).execute()
+                success_count += 1
+                log(f"✅ 已写入: {event['event']} ({event['start'][11:16]}-{event['end'][11:16]})")
+            except Exception as e:
+                log(f"❌ 写入失败: {event['event']} - {str(e)[:50]}")
+                continue
 
     return success_count
 

@@ -993,7 +993,9 @@ with _col_main:
     st.markdown("""
     <div style="background:#F5F5F7;border-radius:12px;padding:1rem;margin-bottom:1rem;">
         <p style="color:#1D1D1F;font-size:0.8rem;margin:0;">
-        上传备忘录截图，AI 自动解析日程并分类。支持一次上传多日截图，按日期顺序排列后批量写入 Google Calendar。
+        上传备忘录截图，AI 自动解析日程并分类。支持一次上传多日截图。
+        写入时按「整日替换」：先清空该日日历中带时间的旧日程（含手动添加），再写入新解析结果；
+        解析失败的日期不会清空。同一天多张图按顺序处理，后一张覆盖前一张。
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -1005,7 +1007,7 @@ with _col_main:
             "上传日程截图",
             type=["png", "jpg", "jpeg"],
             accept_multiple_files=True,
-            help="可同时上传多日截图，文件顺序对应日期顺序（起始日期依次 +1 天）",
+            help="可同时上传多日截图，文件顺序对应日期顺序（起始日期依次 +1 天）；写入时按天整日替换",
         )
 
     with _ci_col2:
@@ -1017,8 +1019,11 @@ with _col_main:
 
     if _uploaded_imgs and st.button("🤖 解析日程", type="primary"):
         with st.spinner("正在解析截图..."):
-            _all_parsed: list[dict] = []
+            # 按日保存；同一天后解析的图覆盖先前结果（later wins）
+            _events_by_day: dict[str, list[dict]] = {}
+            _day_order: list[str] = []
             _parse_errors: list[str] = []
+            _skipped_empty: list[str] = []
             _prog = st.progress(0, text="准备解析...")
             try:
                 for _i, _img_file in enumerate(_uploaded_imgs):
@@ -1026,27 +1031,42 @@ with _col_main:
                     _prog.progress((_i) / len(_uploaded_imgs), text=f"解析第 {_i+1}/{len(_uploaded_imgs)} 张（{_day_date}）...")
                     try:
                         _parsed = parse_schedule_screenshot(_img_file.read(), _day_date)
-                        _all_parsed.extend(_parsed)
+                        if not _parsed:
+                            # 解析成功但无日程：不清空当天，也不纳入写入
+                            _skipped_empty.append(f"{_img_file.name}（{_day_date}）: 未识别到日程，已跳过")
+                            continue
+                        if _day_date not in _events_by_day:
+                            _day_order.append(_day_date)
+                        _events_by_day[_day_date] = _parsed
                     except Exception as _e:
                         import traceback
                         _full_error = f"{_img_file.name}（{_day_date}）:\n{type(_e).__name__}: {str(_e)}\n{traceback.format_exc()}"
                         _parse_errors.append(_full_error)
                 _prog.empty()
+                _all_parsed = [
+                    ev for day in _day_order for ev in _events_by_day.get(day, [])
+                ]
                 if _all_parsed:
                     st.session_state["parsed_events"] = _all_parsed
-                    _msg = f"✓ 成功解析 {len(_all_parsed)} 个日程（共 {len(_uploaded_imgs)} 张截图）"
+                    _msg = f"✓ 成功解析 {len(_all_parsed)} 个日程（{len(_events_by_day)} 天 / 共 {len(_uploaded_imgs)} 张截图）"
                     if _parse_errors:
-                        _msg += f"，{len(_parse_errors)} 张失败"
+                        _msg += f"，{len(_parse_errors)} 张失败（对应日期未清空）"
+                    if _skipped_empty:
+                        _msg += f"，{len(_skipped_empty)} 张无日程已跳过"
                     st.success(_msg)
                     for _err in _parse_errors:
                         with st.expander("❌ 查看详细错误", expanded=True):
                             st.code(_err, language="text")
+                    for _skip in _skipped_empty:
+                        st.info(_skip)
                     st.rerun()
                 else:
-                    st.error("所有截图解析失败")
+                    st.error("所有截图解析失败或未识别到日程（未清空任何日期）")
                     for _err in _parse_errors:
                         with st.expander("❌ 查看详细错误", expanded=True):
                             st.code(_err, language="text")
+                    for _skip in _skipped_empty:
+                        st.info(_skip)
             except Exception as e:
                 _prog.empty()
                 import traceback
@@ -1164,26 +1184,25 @@ with _col_main:
                     _events[i]["start"] = f"{date_str}T{start_time}:00"
                     _events[i]["end"] = f"{date_str}T{end_time}:00"
 
-                # 写入日历
-                _progress_bar = st.progress(0)
+                _days_in_batch = sorted({ev["start"].split("T")[0] for ev in _events})
+                _progress_bar = st.progress(0, text="准备整日替换...")
                 _log_area = st.empty()
 
-                # 日志收集器（避免在回调中直接调用 st 组件）
                 _log_messages = []
                 def _log_callback(msg):
                     _log_messages.append(msg)
+                    # 按日志行数粗略刷新进度文案
+                    _progress_bar.progress(
+                        min(0.95, 0.1 + 0.8 * len(_log_messages) / max(len(_events) * 3, 1)),
+                        text=f"整日替换写入中（涉及 {len(_days_in_batch)} 天）...",
+                    )
+                    _log_area.text("\n".join(_log_messages[-40:]))
 
                 try:
-                    for idx, ev in enumerate(_events):
-                        _progress_bar.progress((idx + 1) / len(_events))
-                        _log_callback(f"\n📝 [{idx+1}/{len(_events)}] {ev['event']}")
-
-                        # 写入单个事件
-                        insert_events_batch([ev], _mapping, log_callback=_log_callback)
-
-                        # 实时显示日志（在主线程）
-                        _log_area.text("\n".join(_log_messages[-30:]))
-
+                    _written = insert_events_batch(
+                        _events, _mapping, log_callback=_log_callback
+                    )
+                    _progress_bar.progress(1.0, text="完成")
                     _progress_bar.empty()
                     _log_area.empty()
 
@@ -1194,9 +1213,11 @@ with _col_main:
                     ]
                     add_batch_examples(_corrections)
 
-                    st.success(f"✓ 成功写入 {len(_events)} 个日程，分类经验已保存")
+                    st.success(
+                        f"✓ 已按天整日替换并写入 {_written}/{len(_events)} 个日程"
+                        f"（{', '.join(_days_in_batch)}），分类经验已保存"
+                    )
 
-                    # 显示完整日志
                     with st.expander("📋 查看详细日志"):
                         st.code("\n".join(_log_messages), language="text")
 
