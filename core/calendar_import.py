@@ -7,12 +7,13 @@ AI 日程批量导入模块
 写入策略：按天整日替换——对每个成功解析出日程的日期，先删除绑定日历中
 当天所有带起止时间的事件，再写入新日程。解析失败或当天无日程则跳过、不清空。
 """
+import base64
 import re
 from collections import defaultdict
 from datetime import datetime, timedelta
 from io import BytesIO
 
-import google.generativeai as genai
+import requests
 from PIL import Image
 
 from core.auth import get_calendar_service
@@ -74,45 +75,170 @@ def _build_gemini_prompt(few_shot_examples: list[dict]) -> str:
     return prompt
 
 
-# gemini-2.0-flash-exp 已下线。按兼容性/额度依次尝试仍可用的 Flash 视觉模型。
+# 已下线，即使 secrets 里写了也要跳过
+_RETIRED_GEMINI_MODELS = {
+    "gemini-2.0-flash-exp",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-001",
+    "gemini-2.0-flash-lite",
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-002",
+    "gemini-1.5-pro",
+}
+
+# 按额度/兼容性优先的 Flash 视觉模型（须出现在 ListModels 结果里才会使用）
 _GEMINI_MODEL_CANDIDATES = (
     "gemini-2.5-flash",
     "gemini-3.5-flash",
     "gemini-3.1-flash-lite",
     "gemini-3.8-flash",
+    "gemini-flash-latest",
 )
 
+_GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 
-def _is_model_unavailable(exc: BaseException) -> bool:
-    msg = str(exc).lower()
+
+class _GeminiTextResponse:
+    def __init__(self, text: str):
+        self.text = text
+
+
+def _model_id(name: str) -> str:
+    return name.replace("models/", "").strip()
+
+
+def _is_retired_model(name: str) -> bool:
+    mid = _model_id(name).lower()
+    return mid in _RETIRED_GEMINI_MODELS or "2.0-flash-exp" in mid
+
+
+def _list_generate_content_models(api_key: str) -> list[str]:
+    url = f"{_GEMINI_API_BASE}/models"
+    resp = requests.get(url, params={"key": api_key}, timeout=30)
+    resp.raise_for_status()
+    names = []
+    for model in resp.json().get("models", []):
+        methods = model.get("supportedGenerationMethods", [])
+        if "generateContent" in methods:
+            names.append(_model_id(model.get("name", "")))
+    return [n for n in names if n]
+
+
+def _choose_gemini_models(api_key: str, preferred: str) -> list[str]:
+    available = _list_generate_content_models(api_key)
+    available_set = set(available)
+    chosen: list[str] = []
+
+    def add(name: str):
+        mid = _model_id(name)
+        if not mid or _is_retired_model(mid) or mid in chosen:
+            return
+        if mid in available_set:
+            chosen.append(mid)
+
+    add(preferred)
+    for name in _GEMINI_MODEL_CANDIDATES:
+        add(name)
+    if not chosen:
+        for name in available:
+            if "flash" in name and "tts" not in name and "image" not in name and not _is_retired_model(name):
+                chosen.append(name)
+                break
+    if not chosen:
+        chosen.extend([n for n in available if not _is_retired_model(n)][:3])
+    return chosen
+
+
+def _image_to_inline_part(img) -> dict:
+    buf = BytesIO()
+    fmt = (img.format or "PNG").upper()
+    if fmt == "JPG":
+        fmt = "JPEG"
+    if fmt not in ("PNG", "JPEG", "WEBP"):
+        fmt = "PNG"
+    img.save(buf, format=fmt)
+    mime = {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp"}[fmt]
+    return {
+        "inline_data": {
+            "mime_type": mime,
+            "data": base64.b64encode(buf.getvalue()).decode("ascii"),
+        }
+    }
+
+
+def _extract_gemini_text(payload: dict) -> str:
+    candidates = payload.get("candidates") or []
+    if not candidates:
+        raise RuntimeError(f"Gemini 返回空结果: {payload}")
+    parts = candidates[0].get("content", {}).get("parts") or []
+    texts = [p.get("text", "") for p in parts if p.get("text")]
+    text = "\n".join(texts).strip()
+    if not text:
+        raise RuntimeError(f"Gemini 未返回文本: {payload}")
+    return text
+
+
+def _generate_content_rest(api_key: str, model_name: str, prompt: str, img) -> str:
+    url = f"{_GEMINI_API_BASE}/models/{_model_id(model_name)}:generateContent"
+    body = {
+        "contents": [{
+            "role": "user",
+            "parts": [
+                {"text": prompt},
+                _image_to_inline_part(img),
+            ],
+        }]
+    }
+    resp = requests.post(url, params={"key": api_key}, json=body, timeout=120)
+    if resp.status_code in (404, 400) and _is_model_unavailable_text(resp.text):
+        raise LookupError(resp.text)
+    if not resp.ok:
+        raise RuntimeError(f"Gemini HTTP {resp.status_code}: {resp.text[:500]}")
+    return _extract_gemini_text(resp.json())
+
+
+def _is_model_unavailable_text(msg: str) -> bool:
+    lower = msg.lower()
     return (
-        "404" in msg
-        or "not_found" in msg
-        or "not found" in msg
-        or "is not supported" in msg
+        "404" in lower
+        or "not_found" in lower
+        or "not found" in lower
+        or "is not supported" in lower
+        or "not available" in lower
     )
 
 
-def _generate_with_available_model(prompt, img, st, os):
-    """Call generateContent, skipping retired model IDs (404)."""
-    preferred = st.secrets.get("GEMINI_MODEL", os.getenv("GEMINI_MODEL", "")).strip()
-    candidates = []
-    if preferred:
-        candidates.append(preferred)
-    for name in _GEMINI_MODEL_CANDIDATES:
-        if name not in candidates:
-            candidates.append(name)
+def _generate_with_available_model(prompt, img, api_key: str, st, os):
+    """Call generateContent over REST, using a live model from ListModels."""
+    preferred = ""
+    try:
+        preferred = str(st.secrets.get("GEMINI_MODEL", "") or "").strip()
+    except Exception:
+        preferred = ""
+    if not preferred:
+        preferred = (os.getenv("GEMINI_MODEL") or "").strip()
 
     last_error = None
-    tried = []
+    tried: list[str] = []
+    try:
+        candidates = _choose_gemini_models(api_key, preferred)
+    except Exception as e:
+        raise RuntimeError(f"无法列出 Gemini 模型: {e}") from e
+
+    if not candidates:
+        raise RuntimeError("ListModels 未返回任何可用的 generateContent 模型")
+
     for model_name in candidates:
         tried.append(model_name)
-        model = genai.GenerativeModel(model_name)
         try:
-            return model.generate_content([prompt, img])
+            text = _generate_content_rest(api_key, model_name, prompt, img)
+            return _GeminiTextResponse(text)
+        except LookupError as e:
+            last_error = e
+            continue
         except Exception as e:
             last_error = e
-            if _is_model_unavailable(e):
+            if _is_model_unavailable_text(str(e)):
                 continue
             raise
 
@@ -144,8 +270,6 @@ def parse_schedule_screenshot(image_bytes: bytes, schedule_date: str) -> list[di
     if not api_key:
         raise ValueError("未配置 GEMINI_API_KEY，请在 secrets.toml 中添加")
 
-    genai.configure(api_key=api_key)
-
     # 压缩图片（避免超出 API 限制）
     img = Image.open(BytesIO(image_bytes))
     if img.width > 1024:
@@ -154,7 +278,7 @@ def parse_schedule_screenshot(image_bytes: bytes, schedule_date: str) -> list[di
         img = img.resize(new_size, Image.LANCZOS)
 
     prompt = _build_gemini_prompt(examples)
-    response = _generate_with_available_model(prompt, img, st, os)
+    response = _generate_with_available_model(prompt, img, api_key, st, os)
 
     # 解析 JSON 响应
     import json
