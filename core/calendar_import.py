@@ -74,6 +74,53 @@ def _build_gemini_prompt(few_shot_examples: list[dict]) -> str:
     return prompt
 
 
+# gemini-2.0-flash-exp 已下线。按兼容性/额度依次尝试仍可用的 Flash 视觉模型。
+_GEMINI_MODEL_CANDIDATES = (
+    "gemini-2.5-flash",
+    "gemini-3.5-flash",
+    "gemini-3.1-flash-lite",
+    "gemini-3.8-flash",
+)
+
+
+def _is_model_unavailable(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    return (
+        "404" in msg
+        or "not_found" in msg
+        or "not found" in msg
+        or "is not supported" in msg
+    )
+
+
+def _generate_with_available_model(prompt, img, st, os):
+    """Call generateContent, skipping retired model IDs (404)."""
+    preferred = st.secrets.get("GEMINI_MODEL", os.getenv("GEMINI_MODEL", "")).strip()
+    candidates = []
+    if preferred:
+        candidates.append(preferred)
+    for name in _GEMINI_MODEL_CANDIDATES:
+        if name not in candidates:
+            candidates.append(name)
+
+    last_error = None
+    tried = []
+    for model_name in candidates:
+        tried.append(model_name)
+        model = genai.GenerativeModel(model_name)
+        try:
+            return model.generate_content([prompt, img])
+        except Exception as e:
+            last_error = e
+            if _is_model_unavailable(e):
+                continue
+            raise
+
+    raise RuntimeError(
+        f"没有可用的 Gemini 模型（已尝试: {', '.join(tried)}）。最后错误: {last_error}"
+    ) from last_error
+
+
 def parse_schedule_screenshot(image_bytes: bytes, schedule_date: str) -> list[dict]:
     """
     解析备忘录截图，返回结构化日程列表。
@@ -98,7 +145,6 @@ def parse_schedule_screenshot(image_bytes: bytes, schedule_date: str) -> list[di
         raise ValueError("未配置 GEMINI_API_KEY，请在 secrets.toml 中添加")
 
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.0-flash-exp")
 
     # 压缩图片（避免超出 API 限制）
     img = Image.open(BytesIO(image_bytes))
@@ -107,9 +153,8 @@ def parse_schedule_screenshot(image_bytes: bytes, schedule_date: str) -> list[di
         new_size = (1024, int(img.height * ratio))
         img = img.resize(new_size, Image.LANCZOS)
 
-    # 调用 Gemini Vision API
     prompt = _build_gemini_prompt(examples)
-    response = model.generate_content([prompt, img])
+    response = _generate_with_available_model(prompt, img, st, os)
 
     # 解析 JSON 响应
     import json
