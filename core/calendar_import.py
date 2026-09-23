@@ -466,13 +466,15 @@ def _delete_timed_events_for_day(
                 hard_failures.append(err)
                 log(f"⚠️ 查询日历失败 (重试后仍失败): {err}")
 
+        # 任一可写日历查不到，就不能写——否则只会清空部分日历，另一部分继续叠层
+        if query_fail:
+            raise RuntimeError(
+                f"{day_date} 有 {query_fail}/{len(all_calendar_ids)} 个日历查询失败，"
+                f"拒绝整日替换以免叠加重复。错误: {hard_failures[:5]}"
+            )
+
         if not events_to_delete:
             if pass_no == 1:
-                if query_fail and not query_ok:
-                    raise RuntimeError(
-                        f"{day_date} 所有日历查询均失败，拒绝写入以免叠加重复。"
-                        f" 错误示例: {hard_failures[:3]}"
-                    )
                 log(f"✓ {day_date} 当天无带时间旧事件（查询成功 {query_ok} 个日历）")
             else:
                 log(f"✓ {day_date} 第 {pass_no} 轮清扫后已无残留")
@@ -577,6 +579,23 @@ def insert_events_batch(events: list[dict], calendar_mapping: dict[str, str], lo
 
         log(f"\n📅 整日替换: {day}（{len(day_events)} 条新日程）")
         _delete_timed_events_for_day(service, day, target_ids, log_callback)
+
+        # 删除后再核验一次：任何残留都中止写入
+        leftover = 0
+        leftover_samples = []
+        for cal_id in target_ids:
+            items = _list_timed_events_overlapping_day(service, cal_id, day)
+            leftover += len(items)
+            for evt in items[:2]:
+                leftover_samples.append(
+                    f"{cal_id}:{evt.get('summary')}:{evt.get('start', {}).get('dateTime')}"
+                )
+        if leftover:
+            raise RuntimeError(
+                f"{day} 清扫后仍剩 {leftover} 个带时间事件，中止写入。"
+                f" 样例: {leftover_samples[:5]}"
+            )
+        log(f"✓ {day} 清扫核验通过，开始写入 {len(day_events)} 条")
 
         for event in day_events:
             category = event.get("category", "其他")

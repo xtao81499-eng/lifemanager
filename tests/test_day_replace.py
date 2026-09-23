@@ -198,6 +198,27 @@ class DayReplaceTests(unittest.TestCase):
                 FakeService(api), "2026-09-04", ["broken"], log_callback=_quiet_log
             )
 
+    @patch("time.sleep", return_value=None)
+    def test_aborts_if_any_calendar_query_fails(self, _sleep):
+        """Partial query failure must not proceed — that was stacking sleep etc."""
+        day = "2026-09-02"
+        store = {
+            "sleep": [_dup_event(1, day)],
+            "broken": [_dup_event(2, day)],
+        }
+        api = FakeEventsAPI(store, fail_first_n={"broken": 99})
+        with self.assertRaises(RuntimeError) as ctx:
+            _delete_timed_events_for_day(
+                FakeService(api),
+                day,
+                ["sleep", "broken"],
+                log_callback=_quiet_log,
+            )
+        self.assertIn("查询失败", str(ctx.exception))
+        # must not have deleted from the successful calendar either in a half-applied way
+        # (abort happens before deletes in the failing pass)
+        self.assertEqual(len(store["sleep"]), 1)
+
 
     def test_parses_non_shanghai_offsets(self):
         from core.calendar_import import _parse_event_datetime
