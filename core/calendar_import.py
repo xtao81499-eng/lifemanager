@@ -86,12 +86,16 @@ _RETIRED_GEMINI_MODELS = {
     "gemini-1.5-pro",
 }
 
-# 按额度/兼容性优先的 Flash 视觉模型（须出现在 ListModels 结果里才会使用）
+# 按额度/抗过载优先：lite 往往更空闲；遇 503 会自动换下一个
 _GEMINI_MODEL_CANDIDATES = (
+    "gemini-2.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash-lite",
     "gemini-2.5-flash",
     "gemini-3.5-flash",
-    "gemini-3.1-flash-lite",
+    "gemini-3.6-flash",
     "gemini-3.8-flash",
+    "gemini-flash-lite-latest",
     "gemini-flash-latest",
 )
 
@@ -178,6 +182,10 @@ def _extract_gemini_text(payload: dict) -> str:
     return text
 
 
+class _GeminiOverloaded(Exception):
+    """Transient 429/503 — retry or try next model."""
+
+
 def _generate_content_rest(api_key: str, model_name: str, prompt: str, img) -> str:
     url = f"{_GEMINI_API_BASE}/models/{_model_id(model_name)}:generateContent"
     body = {
@@ -192,6 +200,10 @@ def _generate_content_rest(api_key: str, model_name: str, prompt: str, img) -> s
     resp = requests.post(url, params={"key": api_key}, json=body, timeout=120)
     if resp.status_code in (404, 400) and _is_model_unavailable_text(resp.text):
         raise LookupError(resp.text)
+    if resp.status_code in (429, 503) or _is_overload_text(resp.text):
+        raise _GeminiOverloaded(
+            f"{model_name} HTTP {resp.status_code}: {resp.text[:300]}"
+        )
     if not resp.ok:
         raise RuntimeError(f"Gemini HTTP {resp.status_code}: {resp.text[:500]}")
     return _extract_gemini_text(resp.json())
@@ -204,12 +216,28 @@ def _is_model_unavailable_text(msg: str) -> bool:
         or "not_found" in lower
         or "not found" in lower
         or "is not supported" in lower
-        or "not available" in lower
+        or "no longer available" in lower
+    )
+
+
+def _is_overload_text(msg: str) -> bool:
+    lower = msg.lower()
+    return (
+        "503" in lower
+        or "429" in lower
+        or "unavailable" in lower
+        or "high demand" in lower
+        or "resource_exhausted" in lower
+        or "quota" in lower
+        or "rate limit" in lower
+        or "overloaded" in lower
     )
 
 
 def _generate_with_available_model(prompt, img, api_key: str, st, os):
-    """Call generateContent over REST, using a live model from ListModels."""
+    """Call generateContent over REST; on 503/429 retry then fall over to next model."""
+    import time
+
     preferred = ""
     try:
         preferred = str(st.secrets.get("GEMINI_MODEL", "") or "").strip()
@@ -230,20 +258,28 @@ def _generate_with_available_model(prompt, img, api_key: str, st, os):
 
     for model_name in candidates:
         tried.append(model_name)
-        try:
-            text = _generate_content_rest(api_key, model_name, prompt, img)
-            return _GeminiTextResponse(text)
-        except LookupError as e:
-            last_error = e
-            continue
-        except Exception as e:
-            last_error = e
-            if _is_model_unavailable_text(str(e)):
-                continue
-            raise
+        for attempt in range(1, 4):
+            try:
+                text = _generate_content_rest(api_key, model_name, prompt, img)
+                return _GeminiTextResponse(text)
+            except LookupError as e:
+                last_error = e
+                break  # model missing → next model
+            except _GeminiOverloaded as e:
+                last_error = e
+                if attempt < 3:
+                    time.sleep(0.8 * attempt)
+                    continue
+                break  # exhausted retries → next model
+            except Exception as e:
+                last_error = e
+                if _is_model_unavailable_text(str(e)) or _is_overload_text(str(e)):
+                    break
+                raise
 
     raise RuntimeError(
-        f"没有可用的 Gemini 模型（已尝试: {', '.join(tried)}）。最后错误: {last_error}"
+        f"Gemini 暂时不可用（已尝试: {', '.join(tried)}）。"
+        f"多为限流/过载，请稍后再点「解析日程」。最后错误: {last_error}"
     ) from last_error
 
 
