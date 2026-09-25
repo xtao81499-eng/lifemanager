@@ -1019,6 +1019,19 @@ with _col_main:
         )
 
     if _uploaded_imgs and st.button("🤖 解析日程", type="primary"):
+        # 在按钮处理开头一次性读取 secrets，解析过程不再触碰 Streamlit API
+        # （长耗时 + 中途 st.secrets/progress 易触发 SessionInfo 未初始化）
+        import os as _os
+
+        try:
+            _gemini_key = st.secrets.get("GEMINI_API_KEY", _os.getenv("GEMINI_API_KEY", ""))
+        except Exception:
+            _gemini_key = _os.getenv("GEMINI_API_KEY", "")
+        try:
+            _gemini_model = str(st.secrets.get("GEMINI_MODEL", "") or "").strip()
+        except Exception:
+            _gemini_model = (_os.getenv("GEMINI_MODEL") or "").strip()
+
         with st.spinner("正在解析截图..."):
             # 按日保存；同一天后解析的图覆盖先前结果（later wins）
             _events_by_day: dict[str, list[dict]] = {}
@@ -1029,9 +1042,20 @@ with _col_main:
             try:
                 for _i, _img_file in enumerate(_uploaded_imgs):
                     _day_date = (_schedule_date + timedelta(days=_i)).strftime("%Y-%m-%d")
-                    _prog.progress((_i) / len(_uploaded_imgs), text=f"解析第 {_i+1}/{len(_uploaded_imgs)} 张（{_day_date}）...")
                     try:
-                        _parsed = parse_schedule_screenshot(_img_file.read(), _day_date)
+                        _prog.progress(
+                            (_i) / max(len(_uploaded_imgs), 1),
+                            text=f"解析第 {_i+1}/{len(_uploaded_imgs)} 张（{_day_date}）...",
+                        )
+                    except Exception:
+                        pass
+                    try:
+                        _parsed = parse_schedule_screenshot(
+                            _img_file.read(),
+                            _day_date,
+                            api_key=_gemini_key,
+                            preferred_model=_gemini_model,
+                        )
                         if not _parsed:
                             # 解析成功但无日程：不清空当天，也不纳入写入
                             _skipped_empty.append(f"{_img_file.name}（{_day_date}）: 未识别到日程，已跳过")
@@ -1190,21 +1214,17 @@ with _col_main:
                 _progress_bar = st.progress(0, text="准备整日替换...")
                 _log_area = st.empty()
 
+                # 只收集日志，禁止在回调里调用 st.*（会触发 SessionInfo 错误）
                 _log_messages = []
                 def _log_callback(msg):
                     _log_messages.append(msg)
-                    # 按日志行数粗略刷新进度文案
-                    _progress_bar.progress(
-                        min(0.95, 0.1 + 0.8 * len(_log_messages) / max(len(_events) * 3, 1)),
-                        text=f"整日替换写入中（涉及 {len(_days_in_batch)} 天）...",
-                    )
-                    _log_area.text("\n".join(_log_messages[-40:]))
 
                 try:
                     _written = insert_events_batch(
                         _events, _mapping, log_callback=_log_callback
                     )
                     _progress_bar.progress(1.0, text="完成")
+                    _log_area.text("\n".join(_log_messages[-40:]))
                     _progress_bar.empty()
                     _log_area.empty()
 

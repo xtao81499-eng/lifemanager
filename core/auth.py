@@ -117,8 +117,15 @@ def _creds_from_streamlit_secrets():
     except ModuleNotFoundError:
         return None
 
-    # st.secrets 访问在无 secrets 文件时会抛异常，需保护。
+    # st.secrets 访问在无 secrets / SessionInfo 未就绪时会抛异常，需保护。
     try:
+        # 避免在 websocket 抖动时因 SessionInfo 未初始化而崩掉整页
+        from streamlit.runtime.scriptrunner_utils.script_run_context import (
+            get_script_run_ctx,
+        )
+
+        if get_script_run_ctx() is None:
+            return None
         if "gcp_token" not in st.secrets:
             return None
         tok = st.secrets["gcp_token"]

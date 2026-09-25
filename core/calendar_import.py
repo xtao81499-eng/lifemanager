@@ -234,17 +234,20 @@ def _is_overload_text(msg: str) -> bool:
     )
 
 
-def _generate_with_available_model(prompt, img, api_key: str, st, os):
-    """Call generateContent over REST; on 503/429 retry then fall over to next model."""
+def _generate_with_available_model(
+    prompt,
+    img,
+    api_key: str,
+    preferred_model: str = "",
+):
+    """Call generateContent over REST; on 503/429 retry then fall over to next model.
+
+    Never touches Streamlit APIs — caller must pass secrets already resolved.
+    """
+    import os
     import time
 
-    preferred = ""
-    try:
-        preferred = str(st.secrets.get("GEMINI_MODEL", "") or "").strip()
-    except Exception:
-        preferred = ""
-    if not preferred:
-        preferred = (os.getenv("GEMINI_MODEL") or "").strip()
+    preferred = (preferred_model or "").strip() or (os.getenv("GEMINI_MODEL") or "").strip()
 
     last_error = None
     tried: list[str] = []
@@ -258,7 +261,7 @@ def _generate_with_available_model(prompt, img, api_key: str, st, os):
 
     for model_name in candidates:
         tried.append(model_name)
-        for attempt in range(1, 4):
+        for attempt in range(1, 3):  # 短重试，避免长 sleep 导致 Streamlit 断线
             try:
                 text = _generate_content_rest(api_key, model_name, prompt, img)
                 return _GeminiTextResponse(text)
@@ -267,8 +270,8 @@ def _generate_with_available_model(prompt, img, api_key: str, st, os):
                 break  # model missing → next model
             except _GeminiOverloaded as e:
                 last_error = e
-                if attempt < 3:
-                    time.sleep(0.8 * attempt)
+                if attempt < 2:
+                    time.sleep(0.5 * attempt)
                     continue
                 break  # exhausted retries → next model
             except Exception as e:
@@ -283,26 +286,33 @@ def _generate_with_available_model(prompt, img, api_key: str, st, os):
     ) from last_error
 
 
-def parse_schedule_screenshot(image_bytes: bytes, schedule_date: str) -> list[dict]:
+def parse_schedule_screenshot(
+    image_bytes: bytes,
+    schedule_date: str,
+    *,
+    api_key: str | None = None,
+    preferred_model: str | None = None,
+) -> list[dict]:
     """
     解析备忘录截图，返回结构化日程列表。
 
     Args:
         image_bytes: 图片字节数据
         schedule_date: 日程日期（YYYY-MM-DD）
+        api_key: Gemini API Key（应由 UI 层传入，避免解析过程中访问 Streamlit secrets）
+        preferred_model: 可选首选模型名
 
     Returns:
         [{"start": "2026-08-13T08:00:00", "end": "2026-08-13T09:00:00",
           "event": "晨练", "score": 8, "notes": "跑步5km", "category": "运动"}, ...]
     """
+    import os
+
     # 加载 few-shot 示例
     examples = load_examples()
 
-    # 配置 Gemini
-    import os
-    import streamlit as st
-
-    api_key = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
+    if not api_key:
+        api_key = os.getenv("GEMINI_API_KEY", "")
     if not api_key:
         raise ValueError("未配置 GEMINI_API_KEY，请在 secrets.toml 中添加")
 
@@ -314,7 +324,9 @@ def parse_schedule_screenshot(image_bytes: bytes, schedule_date: str) -> list[di
         img = img.resize(new_size, Image.LANCZOS)
 
     prompt = _build_gemini_prompt(examples)
-    response = _generate_with_available_model(prompt, img, api_key, st, os)
+    response = _generate_with_available_model(
+        prompt, img, api_key, preferred_model=preferred_model or ""
+    )
 
     # 解析 JSON 响应
     import json
